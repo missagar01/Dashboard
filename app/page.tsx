@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button"
 
 interface DataRow {
   id: number
-  "Task ID": string
+  "Serial Number": string
   "Name": string
   "Task": string
   "Latest Revision": string
@@ -511,7 +511,7 @@ export default function Dashboard() {
       if (result.success && result.data) {
         const formattedData = result.data.map((row: any, index: number) => ({
           id: row.id || index + 1,
-          "Task ID": row["Task ID"] || '',
+          "Serial Number": row["Serial Number"] || '',
           "Name": row["Name"] || '',
           "Task": row["Task"] || '',
           "Latest Revision": row["Latest Revision"] || '',
@@ -987,7 +987,7 @@ export default function Dashboard() {
                 <table className="w-full border-collapse">
                   <thead>
                     <tr className="border-b">
-                      <th className="text-left p-3 font-semibold">Task ID</th>
+                      <th className="text-left p-4 font-semibold">Serial Number</th>
                       <th className="text-left p-3 font-semibold">
                         <button className="flex items-center gap-2 hover:text-blue-600">
                           Name
@@ -1015,7 +1015,7 @@ export default function Dashboard() {
                     {filteredData.length > 0 ? (
                       filteredData.map((row) => (
                         <tr key={row.id} className="border-b hover:bg-gray-50">
-                          <td className="p-3 font-medium text-blue-600">{row["Task ID"]}</td>
+                          <td className="p-3 font-medium text-blue-600">{row["Serial Number"]}</td>
                           <td className="p-3 font-medium">{row.Name}</td>
                           <td className="p-3 max-w-md">
                             <div className="flex items-center gap-2">
@@ -1037,8 +1037,8 @@ export default function Dashboard() {
                             </Badge>
                           </td>
                           <td className="p-3">
-         <Badge variant="outline" className="text-black"> {row.Week}</Badge>                         
-                  </td>
+                            <Badge variant="outline" className="text-black">{row.Week}</Badge>
+                          </td>
                         </tr>
                       ))
                     ) : (
