@@ -14,6 +14,7 @@ interface SheetRow {
   id: number
   rowIndex: number // Actual row index in sheet (for updates)
   taskId: string
+  week: string // Add week field
   doerName: string
   task: string
   date: string
@@ -21,6 +22,7 @@ interface SheetRow {
   columnK: string // Column K value for determining extend column
   status: string
   columnL: string // This will determine pending vs history
+  columnM: string // Add Column M data
   columnO: string // Add this line
 }
 
@@ -73,13 +75,15 @@ export default function TasksView() {
     id: index,
     rowIndex: index + 2, // +2 because we skip header and arrays are 0-based but sheets are 1-based
     taskId: row[0] || "", // Column A
+    week: row[13] || "", // Column M for week data
     doerName: row[1] || "", // Column B
     task: row[2] || "", // Column C
     date: row[3] || "", // Column D
     columnJ: row[9] || "", // Column J (index 9) - this is the date we'll filter by
     columnK: row[10] || "0", // Column K (index 10) - this determines which column to update for extend
-    status: row[12] || "", // Column M
+    status: row[12] || "", // Column M for status as well
     columnL: row[11] || "", // Column L (index 11 since array is 0-based)
+    columnM: row[12] || "", // Column M data
     columnO: row[14] || "", // Add this line
   }))
   .filter((row: SheetRow) => row.taskId) // Filter out empty rows
@@ -279,6 +283,7 @@ export default function TasksView() {
     return tasks.filter(
       (task) =>
         task.taskId.toLowerCase().includes(searchLower) ||
+        task.week.toLowerCase().includes(searchLower) ||
         task.doerName.toLowerCase().includes(searchLower) ||
         task.task.toLowerCase().includes(searchLower) ||
         task.date.toLowerCase().includes(searchLower) ||
@@ -333,9 +338,7 @@ export default function TasksView() {
     return dateString
   }
 
-  // Apply date filter to pending tasks
   // Apply date filter to pending tasks based on Column O text values
-// Apply date filter to pending tasks based on Column O text values
 const dateFilteredPendingTasks = (() => {
   console.log("Applying filter:", dateFilter)
   
@@ -488,6 +491,7 @@ const dateFilteredPendingTasks = (() => {
                                 />
                                 <div>
                                   <div className="font-medium text-blue-600 text-sm">{row.taskId}</div>
+                                  <div className="text-xs text-gray-500">{row.week}</div>
                                   <div className="font-medium text-sm">{row.doerName}</div>
                                 </div>
                               </div>
@@ -508,8 +512,8 @@ const dateFilteredPendingTasks = (() => {
                             <div className="text-sm text-gray-700 break-words">{row.task}</div>
 
                             <div className="flex items-center gap-2">
-                              <Badge variant="secondary" className={`text-xs ${getStatusBadgeColor(row.status)}`}>
-                                {row.status || "Pending"}
+                              <Badge variant="secondary" className={`text-xs ${getStatusBadgeColor(row.columnM)}`}>
+                                {row.columnM || "Pending"}
                               </Badge>
                             </div>
 
@@ -562,6 +566,7 @@ const dateFilteredPendingTasks = (() => {
                     <tr className="border-b">
                       <th className="text-left p-3 font-semibold">Select</th>
                       <th className="text-left p-3 font-semibold">Task ID</th>
+                      <th className="text-left p-3 font-semibold">Week</th>
                       <th className="text-left p-3 font-semibold">Doer Name</th>
                       <th className="text-left p-3 font-semibold">Task</th>
                       <th className="text-left p-3 font-semibold">Date</th>
@@ -588,6 +593,7 @@ const dateFilteredPendingTasks = (() => {
                               />
                             </td>
                             <td className="p-3 font-medium text-blue-600 text-sm">{row.taskId}</td>
+                            <td className="p-3 text-sm">{row.week}</td>
                             <td className="p-3 font-medium text-sm">{row.doerName}</td>
                             <td className="p-3 text-sm max-w-[200px] break-words">{row.task}</td>
                             <td className="p-3">
@@ -605,8 +611,8 @@ const dateFilteredPendingTasks = (() => {
                               </Badge>
                             </td>
                             <td className="p-3">
-                              <Badge variant="secondary" className={`text-xs ${getStatusBadgeColor(row.status)}`}>
-                                {row.status || "Pending"}
+                              <Badge variant="secondary" className={`text-xs ${getStatusBadgeColor(row.columnM)}`}>
+                                {row.columnM || "Pending"}
                               </Badge>
                             </td>
                             <td className="p-3">
@@ -638,7 +644,7 @@ const dateFilteredPendingTasks = (() => {
                       })
                     ) : (
                       <tr>
-                        <td colSpan={8} className="text-center py-8 text-gray-500">
+                        <td colSpan={9} className="text-center py-8 text-gray-500">
                           {searchTerm
                             ? `No tasks found matching "${searchTerm}"`
                             : dateFilter === "all"
@@ -673,6 +679,7 @@ const dateFilteredPendingTasks = (() => {
                           <div className="flex items-start justify-between">
                             <div>
                               <div className="font-medium text-blue-600 text-sm">{row.taskId}</div>
+                              <div className="text-xs text-gray-500">{row.week}</div>
                               <div className="font-medium text-sm">{row.doerName}</div>
                             </div>
                             <Badge
@@ -692,8 +699,8 @@ const dateFilteredPendingTasks = (() => {
                           <div className="text-sm text-gray-700 break-words">{row.task}</div>
 
                           <div className="flex items-center justify-between">
-                            <Badge variant="secondary" className={`text-xs ${getStatusBadgeColor(row.status)}`}>
-                              {row.status || "Completed"}
+                            <Badge variant="secondary" className={`text-xs ${getStatusBadgeColor(row.columnM)}`}>
+                              {row.columnM || "Completed"}
                             </Badge>
                             <Badge variant="outline" className="bg-green-50 text-green-700 text-xs whitespace-nowrap">
                               {formatDate(row.columnL)}
@@ -716,6 +723,7 @@ const dateFilteredPendingTasks = (() => {
                   <thead>
                     <tr className="border-b">
                       <th className="text-left p-3 font-semibold">Task ID</th>
+                      <th className="text-left p-3 font-semibold">Week</th>
                       <th className="text-left p-3 font-semibold">Doer Name</th>
                       <th className="text-left p-3 font-semibold">Task</th>
                       <th className="text-left p-3 font-semibold">Date</th>
@@ -728,6 +736,7 @@ const dateFilteredPendingTasks = (() => {
                       searchFilteredCompletedTasks.map((row) => (
                         <tr key={row.id} className="border-b hover:bg-gray-50">
                           <td className="p-3 font-medium text-blue-600 text-sm">{row.taskId}</td>
+                          <td className="p-3 text-sm">{row.week}</td>
                           <td className="p-3 font-medium text-sm">{row.doerName}</td>
                           <td className="p-3 text-sm max-w-[200px] break-words">{row.task}</td>
                           <td className="p-3">
@@ -745,8 +754,8 @@ const dateFilteredPendingTasks = (() => {
                             </Badge>
                           </td>
                           <td className="p-3">
-                            <Badge variant="secondary" className={`text-xs ${getStatusBadgeColor(row.status)}`}>
-                              {row.status || "Completed"}
+                            <Badge variant="secondary" className={`text-xs ${getStatusBadgeColor(row.columnM)}`}>
+                              {row.columnM || "Completed"}
                             </Badge>
                           </td>
                           <td className="p-3">
@@ -758,7 +767,7 @@ const dateFilteredPendingTasks = (() => {
                       ))
                     ) : (
                       <tr>
-                        <td colSpan={6} className="text-center py-8 text-gray-500">
+                        <td colSpan={7} className="text-center py-8 text-gray-500">
                           {searchTerm
                             ? `No completed tasks found matching "${searchTerm}"`
                             : "No completed tasks found."}
@@ -775,8 +784,6 @@ const dateFilteredPendingTasks = (() => {
     </div>
   )
 }
-
-
 
 
 
