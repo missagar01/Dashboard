@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -17,6 +17,12 @@ interface TaskForm {
   description: string
 }
 
+interface DoerInfo {
+  name: string
+  number: string
+  email: string
+}
+
 export default function AddTask() {
   const [tasks, setTasks] = useState<TaskForm[]>([
     {
@@ -28,6 +34,33 @@ export default function AddTask() {
     },
   ])
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [doerList, setDoerList] = useState<DoerInfo[]>([])
+
+  // Fetch doer list on component mount
+  useEffect(() => {
+    const fetchDoerList = async () => {
+      try {
+        const response = await fetch(
+          "https://script.google.com/macros/s/AKfycbw7DWi7erjdmCnV2BQNCf-XG4W4k8XTUgx8QnVZukiGOU6CEeegkqrLb95m91BL2Nvh/exec?sheet=Doer List&action=fetch",
+        )
+        const result = await response.json()
+
+        if (result.success && result.data && result.data.length > 0) {
+          const doers = result.data.map((row: any[]) => ({
+            name: row[0] || "",
+            number: row[1] || "",
+            email: row[2] || "",
+          })).filter((doer: DoerInfo) => doer.name.trim() !== "")
+          
+          setDoerList(doers)
+        }
+      } catch (error) {
+        console.error("Error fetching doer list:", error)
+      }
+    }
+
+    fetchDoerList()
+  }, [])
 
   const generateTaskIds = async (count: number) => {
     try {
@@ -99,6 +132,16 @@ export default function AddTask() {
   const updateTask = (index: number, field: keyof TaskForm, value: string) => {
     const newTasks = [...tasks]
     newTasks[index][field] = value
+    
+    // Auto-fill number and email when doer name is selected
+    if (field === "doerName") {
+      const selectedDoer = doerList.find(doer => doer.name === value)
+      if (selectedDoer) {
+        newTasks[index].number = selectedDoer.number
+        newTasks[index].email = selectedDoer.email
+      }
+    }
+    
     setTasks(newTasks)
   }
 
@@ -221,7 +264,14 @@ export default function AddTask() {
                         value={task.doerName}
                         onChange={(e) => updateTask(index, "doerName", e.target.value)}
                         disabled={isSubmitting}
+                        list={`doerList-${index}`}
+                        autoComplete="off"
                       />
+                      <datalist id={`doerList-${index}`}>
+                        {doerList.map((doer, doerIndex) => (
+                          <option key={doerIndex} value={doer.name} />
+                        ))}
+                      </datalist>
                     </div>
                   </div>
 
