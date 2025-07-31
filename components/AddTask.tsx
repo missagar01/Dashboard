@@ -18,21 +18,25 @@ interface TaskForm {
 }
 
 export default function AddTask() {
-  const [tasks, setTasks] = useState<TaskForm[]>([{
-    doerName: "",
-    number: "",
-    email: "",
-    plannedDate: "",
-    description: "",
-  }])
+  const [tasks, setTasks] = useState<TaskForm[]>([
+    {
+      doerName: "",
+      number: "",
+      email: "",
+      plannedDate: "",
+      description: "",
+    },
+  ])
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const generateTaskIds = async (count: number) => {
     try {
       // Fetch current data to determine next task ID
-      const response = await fetch("https://script.google.com/macros/s/AKfycbw7DWi7erjdmCnV2BQNCf-XG4W4k8XTUgx8QnVZukiGOU6CEeegkqrLb95m91BL2Nvh/exec?sheet=Master&action=fetch")
+      const response = await fetch(
+        "https://script.google.com/macros/s/AKfycbw7DWi7erjdmCnV2BQNCf-XG4W4k8XTUgx8QnVZukiGOU6CEeegkqrLb95m91BL2Nvh/exec?sheet=Master&action=fetch",
+      )
       const result = await response.json()
-      
+
       let maxId = 0
       if (result.success && result.data && result.data.length > 0) {
         // Find the highest task ID number by checking all rows
@@ -41,8 +45,8 @@ export default function AddTask() {
           if (row && row.length > 0 && row[0]) {
             const taskId = row[0].toString().trim()
             // Check if it matches TN-XXX format
-            if (taskId.startsWith('TN-')) {
-              const idNumber = parseInt(taskId.replace('TN-', ''))
+            if (taskId.startsWith("TN-")) {
+              const idNumber = Number.parseInt(taskId.replace("TN-", ""))
               if (!isNaN(idNumber) && idNumber > maxId) {
                 maxId = idNumber
               }
@@ -50,37 +54,39 @@ export default function AddTask() {
           }
         })
       }
-      
+
       // Generate sequential task IDs
       const taskIds = []
       for (let i = 0; i < count; i++) {
         const nextId = maxId + 1 + i
-        taskIds.push(`TN-${nextId.toString().padStart(3, '0')}`)
+        taskIds.push(`TN-${nextId.toString().padStart(3, "0")}`)
       }
-      
       return taskIds
     } catch (error) {
       console.error("Error generating task IDs:", error)
       // Fallback IDs
-      return Array.from({ length: count }, (_, i) => `TN-${(i + 1).toString().padStart(3, '0')}`)
+      return Array.from({ length: count }, (_, i) => `TN-${(i + 1).toString().padStart(3, "0")}`)
     }
   }
 
   // Function to convert date from YYYY-MM-DD to DD/MM/YYYY
   const formatDateForSubmission = (dateString: string) => {
     if (!dateString) return ""
-    const [year, month, day] = dateString.split('-')
+    const [year, month, day] = dateString.split("-")
     return `${day}/${month}/${year}`
   }
 
   const addNewTask = () => {
-    setTasks([...tasks, {
-      doerName: "",
-      number: "",
-      email: "",
-      plannedDate: "",
-      description: "",
-    }])
+    setTasks([
+      ...tasks,
+      {
+        doerName: "",
+        number: "",
+        email: "",
+        plannedDate: "",
+        description: "",
+      },
+    ])
   }
 
   const removeTask = (index: number) => {
@@ -98,68 +104,72 @@ export default function AddTask() {
 
   const handleTasksSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     // Validate all tasks
-    const validTasks = tasks.filter(task => 
-      task.doerName.trim() && task.description.trim() && task.plannedDate.trim()
+    const validTasks = tasks.filter(
+      (task) => task.doerName.trim() && task.description.trim() && task.plannedDate.trim(),
     )
-    
+
     if (validTasks.length === 0) {
       alert("Please fill in all required fields for at least one task")
       return
     }
 
     if (validTasks.length !== tasks.length) {
-      const proceed = confirm(`${tasks.length - validTasks.length} task(s) have missing required fields and will be skipped. Continue with ${validTasks.length} valid task(s)?`)
+      const proceed = confirm(
+        `${tasks.length - validTasks.length} task(s) have missing required fields and will be skipped. Continue with ${validTasks.length} valid task(s)?`,
+      )
       if (!proceed) return
     }
-    
+
     setIsSubmitting(true)
-    
     try {
       // Generate task IDs for all valid tasks
       const taskIds = await generateTaskIds(validTasks.length)
-      
+
       // Prepare all tasks for submission
       const allRowsData = validTasks.map((task, index) => {
         const formattedDate = formatDateForSubmission(task.plannedDate)
-        
+
         // Column A: Task ID, Column B: Doer Name, Column C: Task Description, Column D: Date, Column M: Status
-        const rowData = new Array(13).fill('') // Create array with 13 elements (A to M)
+        const rowData = new Array(13).fill("") // Create array with 13 elements (A to M)
         rowData[0] = taskIds[index] // Column A
         rowData[1] = task.doerName // Column B
         rowData[2] = task.description // Column C
         rowData[3] = formattedDate // Column D - now in DD/MM/YYYY format
         rowData[12] = "Pending" // Column M
-        
         return rowData
       })
-      
+
       // Submit all tasks at once
       const formData = new FormData()
-      formData.append('sheetName', 'Master')
-      formData.append('action', 'insertMultiple')
-      formData.append('rowsData', JSON.stringify(allRowsData))
-      
-      const response = await fetch("https://script.google.com/macros/s/AKfycbw7DWi7erjdmCnV2BQNCf-XG4W4k8XTUgx8QnVZukiGOU6CEeegkqrLb95m91BL2Nvh/exec", {
-        method: 'POST',
-        body: formData
-      })
-      
+      formData.append("sheetName", "Master")
+      formData.append("action", "insertMultiple")
+      formData.append("rowsData", JSON.stringify(allRowsData))
+
+      const response = await fetch(
+        "https://script.google.com/macros/s/AKfycbw7DWi7erjdmCnV2BQNCf-XG4W4k8XTUgx8QnVZukiGOU6CEeegkqrLb95m91BL2Nvh/exec",
+        {
+          method: "POST",
+          body: formData,
+        },
+      )
+
       const result = await response.json()
-      
       if (result.success) {
         // Reset form after successful submission
-        setTasks([{
-          doerName: "",
-          number: "",
-          email: "",
-          plannedDate: "",
-          description: "",
-        }])
-        alert(`${validTasks.length} task(s) added successfully with IDs: ${taskIds.join(', ')}`)
+        setTasks([
+          {
+            doerName: "",
+            number: "",
+            email: "",
+            plannedDate: "",
+            description: "",
+          },
+        ])
+        alert(`${validTasks.length} task(s) added successfully with IDs: ${taskIds.join(", ")}`)
       } else {
-        throw new Error(result.error || 'Failed to submit tasks')
+        throw new Error(result.error || "Failed to submit tasks")
       }
     } catch (error) {
       console.error("Error submitting tasks:", error)
@@ -170,16 +180,16 @@ export default function AddTask() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto">
+    <div className="w-full max-w-4xl mx-auto px-4 sm:px-6">
       <Card>
         <CardHeader>
-          <CardTitle>Add New Tasks</CardTitle>
+          <CardTitle className="text-xl sm:text-2xl">Add New Tasks</CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleTasksSubmit} className="space-y-6">
             {tasks.map((task, index) => (
-              <div key={index} className="border rounded-lg p-4 space-y-4 relative">
-                <div className="flex justify-between items-center">
+              <div key={index} className="border rounded-lg p-4 sm:p-6 space-y-4 relative">
+                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
                   <h3 className="text-lg font-semibold">Task {index + 1}</h3>
                   {tasks.length > 1 && (
                     <Button
@@ -188,15 +198,19 @@ export default function AddTask() {
                       size="sm"
                       onClick={() => removeTask(index)}
                       disabled={isSubmitting}
+                      className="self-start sm:self-center"
                     >
                       <Trash2 className="h-4 w-4" />
+                      <span className="ml-2 sm:hidden">Remove Task</span>
                     </Button>
                   )}
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor={`doerName-${index}`}>Doer Name *</Label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor={`doerName-${index}`} className="text-sm font-medium">
+                      Doer Name *
+                    </Label>
                     <div className="relative">
                       <User className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                       <Input
@@ -205,13 +219,16 @@ export default function AddTask() {
                         placeholder="Enter doer name"
                         className="pl-10"
                         value={task.doerName}
-                        onChange={(e) => updateTask(index, 'doerName', e.target.value)}
+                        onChange={(e) => updateTask(index, "doerName", e.target.value)}
                         disabled={isSubmitting}
                       />
                     </div>
                   </div>
-                  <div>
-                    <Label htmlFor={`number-${index}`}>Number</Label>
+
+                  <div className="space-y-2">
+                    <Label htmlFor={`number-${index}`} className="text-sm font-medium">
+                      Number
+                    </Label>
                     <div className="relative">
                       <Phone className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                       <Input
@@ -220,16 +237,18 @@ export default function AddTask() {
                         placeholder="Enter phone number"
                         className="pl-10"
                         value={task.number}
-                        onChange={(e) => updateTask(index, 'number', e.target.value)}
+                        onChange={(e) => updateTask(index, "number", e.target.value)}
                         disabled={isSubmitting}
                       />
                     </div>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor={`email-${index}`}>Email</Label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor={`email-${index}`} className="text-sm font-medium">
+                      Email
+                    </Label>
                     <div className="relative">
                       <Mail className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                       <Input
@@ -238,13 +257,16 @@ export default function AddTask() {
                         placeholder="Enter email address"
                         className="pl-10"
                         value={task.email}
-                        onChange={(e) => updateTask(index, 'email', e.target.value)}
+                        onChange={(e) => updateTask(index, "email", e.target.value)}
                         disabled={isSubmitting}
                       />
                     </div>
                   </div>
-                  <div>
-                    <Label htmlFor={`plannedDate-${index}`}>Planned Date *</Label>
+
+                  <div className="space-y-2">
+                    <Label htmlFor={`plannedDate-${index}`} className="text-sm font-medium">
+                      Planned Date *
+                    </Label>
                     <div className="relative">
                       <Calendar className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                       <Input
@@ -252,23 +274,25 @@ export default function AddTask() {
                         type="date"
                         className="pl-10"
                         value={task.plannedDate}
-                        onChange={(e) => updateTask(index, 'plannedDate', e.target.value)}
+                        onChange={(e) => updateTask(index, "plannedDate", e.target.value)}
                         disabled={isSubmitting}
                       />
                     </div>
                   </div>
                 </div>
 
-                <div>
-                  <Label htmlFor={`description-${index}`}>Description *</Label>
+                <div className="space-y-2">
+                  <Label htmlFor={`description-${index}`} className="text-sm font-medium">
+                    Description *
+                  </Label>
                   <div className="relative">
                     <FileText className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                     <Textarea
                       id={`description-${index}`}
                       placeholder="Enter task description"
-                      className="pl-10 min-h-[120px]"
+                      className="pl-10 min-h-[120px] resize-none"
                       value={task.description}
-                      onChange={(e) => updateTask(index, 'description', e.target.value)}
+                      onChange={(e) => updateTask(index, "description", e.target.value)}
                       disabled={isSubmitting}
                     />
                   </div>
@@ -276,23 +300,18 @@ export default function AddTask() {
               </div>
             ))}
 
-            <div className="flex gap-4">
+            <div className="flex flex-col sm:flex-row gap-3">
               <Button
                 type="button"
                 variant="outline"
                 onClick={addNewTask}
                 disabled={isSubmitting}
-                className="flex-1"
+                className="flex-1 order-2 sm:order-1 bg-transparent"
               >
                 <Plus className="h-4 w-4 mr-2" />
                 Add Another Task
               </Button>
-              
-              <Button 
-                type="submit"
-                className="flex-1" 
-                disabled={isSubmitting}
-              >
+              <Button type="submit" className="flex-1 order-1 sm:order-2" disabled={isSubmitting}>
                 <Plus className="h-4 w-4 mr-2" />
                 {isSubmitting ? `Submitting ${tasks.length} Task(s)...` : `Submit All Tasks (${tasks.length})`}
               </Button>

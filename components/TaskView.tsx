@@ -1,9 +1,10 @@
 "use client"
+
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Clock, CheckCircle, RefreshCw } from "lucide-react"
+import { Clock, CheckCircle, RefreshCw, Search } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -20,8 +21,8 @@ interface SheetRow {
   columnK: string // Column K value for determining extend column
   status: string
   columnL: string // This will determine pending vs history
+  columnO: string // Add this line
 }
-
 
 interface TaskUpdate {
   taskId: string
@@ -35,55 +36,62 @@ export default function TasksView() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
-  const [taskUpdates, setTaskUpdates] = useState<{[key: string]: TaskUpdate}>({})
+  const [taskUpdates, setTaskUpdates] = useState<{ [key: string]: TaskUpdate }>({})
   const [dateFilter, setDateFilter] = useState<string>("all") // Add this missing state
+  const [searchTerm, setSearchTerm] = useState<string>("") // Add search state
 
   // Fetch data from Google Sheets
   const fetchData = async () => {
     setLoading(true)
     setError(null)
-    
     try {
       console.log("Fetching data from Google Sheets...")
-      
       // First, let's test without sheet parameter to see what sheets are available
-      const testResponse = await fetch("https://script.google.com/macros/s/AKfycbw7DWi7erjdmCnV2BQNCf-XG4W4k8XTUgx8QnVZukiGOU6CEeegkqrLb95m91BL2Nvh/exec")
+      const testResponse = await fetch(
+        "https://script.google.com/macros/s/AKfycbw7DWi7erjdmCnV2BQNCf-XG4W4k8XTUgx8QnVZukiGOU6CEeegkqrLb95m91BL2Nvh/exec",
+      )
       const testResult = await testResponse.json()
       console.log("Test response (no sheet param):", testResult)
-      
+
       // Now try with Master sheet
-      const response = await fetch("https://script.google.com/macros/s/AKfycbw7DWi7erjdmCnV2BQNCf-XG4W4k8XTUgx8QnVZukiGOU6CEeegkqrLb95m91BL2Nvh/exec?sheet=Master&action=fetch")
-      
+      const response = await fetch(
+        "https://script.google.com/macros/s/AKfycbw7DWi7erjdmCnV2BQNCf-XG4W4k8XTUgx8QnVZukiGOU6CEeegkqrLb95m91BL2Nvh/exec?sheet=Master&action=fetch",
+      )
+
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`)
       }
-      
+
       const result = await response.json()
       console.log("Response from Google Apps Script:", result)
-      
+
       if (result.success && result.data) {
         // Skip header row and map the data
-        const mappedData = result.data.slice(1).map((row: any[], index: number) => ({
-          id: index,
-          rowIndex: index + 2, // +2 because we skip header and arrays are 0-based but sheets are 1-based
-          taskId: row[0] || '', // Column A
-          doerName: row[1] || '', // Column B
-          task: row[2] || '', // Column C
-          date: row[3] || '', // Column D
-          columnJ: row[9] || '', // Column J (index 9) - this is the date we'll filter by
-          columnK: row[10] || '0', // Column K (index 10) - this determines which column to update for extend
-          status: row[12] || '', // Column M
-          columnL: row[11] || '' // Column L (index 11 since array is 0-based)
-        })).filter((row: SheetRow) => row.taskId) // Filter out empty rows
-        
+        const mappedData = result.data
+  .slice(1)
+  .map((row: any[], index: number) => ({
+    id: index,
+    rowIndex: index + 2, // +2 because we skip header and arrays are 0-based but sheets are 1-based
+    taskId: row[0] || "", // Column A
+    doerName: row[1] || "", // Column B
+    task: row[2] || "", // Column C
+    date: row[3] || "", // Column D
+    columnJ: row[9] || "", // Column J (index 9) - this is the date we'll filter by
+    columnK: row[10] || "0", // Column K (index 10) - this determines which column to update for extend
+    status: row[12] || "", // Column M
+    columnL: row[11] || "", // Column L (index 11 since array is 0-based)
+    columnO: row[14] || "", // Add this line
+  }))
+  .filter((row: SheetRow) => row.taskId) // Filter out empty rows
+
         console.log("Mapped data:", mappedData)
         setData(mappedData)
       } else {
-        throw new Error(result.error || 'Failed to fetch data')
+        throw new Error(result.error || "Failed to fetch data")
       }
     } catch (err) {
       console.error("Error fetching data:", err)
-      setError(`Failed to load tasks: ${err instanceof Error ? err.message : 'Unknown error'}`)
+      setError(`Failed to load tasks: ${err instanceof Error ? err.message : "Unknown error"}`)
     } finally {
       setLoading(false)
     }
@@ -96,134 +104,134 @@ export default function TasksView() {
 
   // Handle checkbox change
   const handleCheckboxChange = (taskId: string, checked: boolean) => {
-    setTaskUpdates(prev => ({
+    setTaskUpdates((prev) => ({
       ...prev,
       [taskId]: {
         ...prev[taskId],
         taskId,
         isSelected: checked,
-        status: prev[taskId]?.status || '',
-        extendDate: prev[taskId]?.extendDate || ''
-      }
+        status: prev[taskId]?.status || "",
+        extendDate: prev[taskId]?.extendDate || "",
+      },
     }))
   }
 
   // Handle status change
   const handleStatusChange = (taskId: string, status: string) => {
-    setTaskUpdates(prev => ({
+    setTaskUpdates((prev) => ({
       ...prev,
       [taskId]: {
         ...prev[taskId],
         taskId,
         status,
         isSelected: prev[taskId]?.isSelected || false,
-        extendDate: status === 'Done' ? '' : prev[taskId]?.extendDate || ''
-      }
+        extendDate: status === "Done" ? "" : prev[taskId]?.extendDate || "",
+      },
     }))
   }
 
   // Handle extend date change
   const handleExtendDateChange = (taskId: string, date: string) => {
-    setTaskUpdates(prev => ({
+    setTaskUpdates((prev) => ({
       ...prev,
       [taskId]: {
         ...prev[taskId],
         taskId,
         extendDate: date,
         isSelected: prev[taskId]?.isSelected || false,
-        status: prev[taskId]?.status || ''
-      }
+        status: prev[taskId]?.status || "",
+      },
     }))
   }
 
   // Submit updates
-// Submit updates
-const handleSubmit = async () => {
-  const selectedTasks = Object.values(taskUpdates).filter(update => update.isSelected && update.status)
-  
-  if (selectedTasks.length === 0) {
-    alert("Please select tasks and set their status before submitting.")
-    return
-  }
+  const handleSubmit = async () => {
+    const selectedTasks = Object.values(taskUpdates).filter((update) => update.isSelected && update.status)
 
-  setSubmitting(true)
-  
-  try {
-    for (const update of selectedTasks) {
-      const task = data.find(t => t.taskId === update.taskId)
-      if (!task) continue
-
-      const formData = new FormData()
-      formData.append('sheetName', 'Master')
-      
-      if (update.status === 'Done') {
-        // For Done: Update Column L with current date and Column M with "Complete"
-        formData.append('action', 'update')
-        formData.append('rowIndex', task.rowIndex.toString())
-        
-        // Create array for the row with current values, updating only L and M
-        const rowData = new Array(13).fill('')
-        rowData[11] = new Date().toISOString().split('T')[0] // Column L - current date
-        rowData[12] = 'Complete' // Column M - status
-        
-        formData.append('rowData', JSON.stringify(rowData))
-      } else if (update.status === 'Extend' && update.extendDate) {
-        // For Extend: Check Column K value to determine target column
-        formData.append('action', 'update')
-        formData.append('rowIndex', task.rowIndex.toString())
-        
-        // Get Column K value (index 10)
-        const columnKValue = task.columnK || '0' // Default to 0 if not present
-        
-        // Create array for the row with current values
-        const rowData = new Array(13).fill('')
-        
-        // Determine which column to update based on Column K value
-        switch (columnKValue.toString()) {
-          case '0':
-            rowData[4] = update.extendDate // Column E
-            break
-          case '1':
-            rowData[5] = update.extendDate // Column F
-            break
-          case '2':
-            rowData[6] = update.extendDate // Column G
-            break
-          case '3':
-            rowData[7] = update.extendDate // Column H
-            break
-          case '4':
-            rowData[8] = update.extendDate // Column I
-            break
-          default:
-            rowData[4] = update.extendDate // Default to Column E
-            break
-        }
-        
-        formData.append('rowData', JSON.stringify(rowData))
-      }
-
-      const response = await fetch("https://script.google.com/macros/s/AKfycbw7DWi7erjdmCnV2BQNCf-XG4W4k8XTUgx8QnVZukiGOU6CEeegkqrLb95m91BL2Nvh/exec", {
-        method: 'POST',
-        body: formData
-      })
-
-      const result = await response.json()
-      if (!result.success) {
-        throw new Error(`Failed to update task ${update.taskId}: ${result.error}`)
-      }
+    if (selectedTasks.length === 0) {
+      alert("Please select tasks and set their status before submitting.")
+      return
     }
 
-    alert("Tasks updated successfully!")
-    setTaskUpdates({}) // Clear selections
-    await fetchData() // Refresh data
-  } catch (err) {
-    console.error("Error updating tasks:", err)
-    alert(`Error updating tasks: ${err instanceof Error ? err.message : 'Unknown error'}`)
-  } finally {
-    setSubmitting(false)
+    setSubmitting(true)
+    try {
+      for (const update of selectedTasks) {
+        const task = data.find((t) => t.taskId === update.taskId)
+        if (!task) continue
+
+        const formData = new FormData()
+        formData.append("sheetName", "Master")
+
+        if (update.status === "Done") {
+          // For Done: Update Column L with current date and Column M with "Complete"
+          formData.append("action", "update")
+          formData.append("rowIndex", task.rowIndex.toString())
+
+          // Create array for the row with current values, updating only L and M
+          const rowData = new Array(13).fill("")
+          rowData[11] = new Date().toISOString().split("T")[0] // Column L - current date
+          rowData[12] = "Complete" // Column M - status
+          formData.append("rowData", JSON.stringify(rowData))
+        } else if (update.status === "Extend" && update.extendDate) {
+          // For Extend: Check Column K value to determine target column
+          formData.append("action", "update")
+          formData.append("rowIndex", task.rowIndex.toString())
+
+          // Get Column K value (index 10)
+          const columnKValue = task.columnK || "0" // Default to 0 if not present
+
+          // Create array for the row with current values
+          const rowData = new Array(13).fill("")
+
+          // Determine which column to update based on Column K value
+          switch (columnKValue.toString()) {
+            case "0":
+              rowData[4] = update.extendDate // Column E
+              break
+            case "1":
+              rowData[5] = update.extendDate // Column F
+              break
+            case "2":
+              rowData[6] = update.extendDate // Column G
+              break
+            case "3":
+              rowData[7] = update.extendDate // Column H
+              break
+            case "4":
+              rowData[8] = update.extendDate // Column I
+              break
+            default:
+              rowData[4] = update.extendDate // Default to Column E
+              break
+          }
+
+          formData.append("rowData", JSON.stringify(rowData))
+        }
+
+        const response = await fetch(
+          "https://script.google.com/macros/s/AKfycbw7DWi7erjdmCnV2BQNCf-XG4W4k8XTUgx8QnVZukiGOU6CEeegkqrLb95m91BL2Nvh/exec",
+          {
+            method: "POST",
+            body: formData,
+          },
+        )
+
+        const result = await response.json()
+        if (!result.success) {
+          throw new Error(`Failed to update task ${update.taskId}: ${result.error}`)
+        }
+      }
+
+      alert("Tasks updated successfully!")
+      setTaskUpdates({}) // Clear selections
+      await fetchData() // Refresh data
+    } catch (err) {
+      console.error("Error updating tasks:", err)
+      alert(`Error updating tasks: ${err instanceof Error ? err.message : "Unknown error"}`)
+    } finally {
+      setSubmitting(false)
+    }
   }
-}
 
   // Get status badge color
   const getStatusBadgeColor = (status: string): string => {
@@ -238,50 +246,127 @@ const handleSubmit = async () => {
 
   // Get today's date in YYYY-MM-DD format
   const getTodayDate = () => {
-    return new Date().toISOString().split('T')[0]
+    return new Date().toISOString().split("T")[0]
   }
 
-  // Format date to dd/mm/yyyy
+  // Format date to dd/mm/yyyy - if already in dd/mm/yyyy format, return as is
   const formatDate = (dateString: string) => {
     if (!dateString) return "No date"
-    
+
+    // If it's already in dd/mm/yyyy format, return as is
+    if (dateString.match(/^\d{1,2}\/\d{1,2}\/\d{4}$/)) {
+      return dateString
+    }
+
     try {
       const date = new Date(dateString)
-      const day = date.getDate().toString().padStart(2, '0')
-      const month = (date.getMonth() + 1).toString().padStart(2, '0')
-      const year = date.getFullYear()
-      return `${day}/${month}/${year}`
+      if (!isNaN(date.getTime())) {
+        const day = date.getDate().toString().padStart(2, "0")
+        const month = (date.getMonth() + 1).toString().padStart(2, "0")
+        const year = date.getFullYear()
+        return `${day}/${month}/${year}`
+      }
     } catch {
-      return dateString // Return original if parsing fails
+      // If parsing fails, return original string
     }
+    return dateString
+  }
+
+  // Search filter function
+  const filterTasksBySearch = (tasks: SheetRow[]) => {
+    if (!searchTerm.trim()) return tasks
+    const searchLower = searchTerm.toLowerCase().trim()
+    return tasks.filter(
+      (task) =>
+        task.taskId.toLowerCase().includes(searchLower) ||
+        task.doerName.toLowerCase().includes(searchLower) ||
+        task.task.toLowerCase().includes(searchLower) ||
+        task.date.toLowerCase().includes(searchLower) ||
+        task.columnJ.toLowerCase().includes(searchLower) ||
+        task.status.toLowerCase().includes(searchLower) ||
+        formatDate(task.columnJ).toLowerCase().includes(searchLower) ||
+        formatDate(task.columnL).toLowerCase().includes(searchLower),
+    )
   }
 
   // Filter tasks based on column L
-  const allPendingTasks = data.filter(task => !task.columnL || task.columnL.trim() === '')
-  const completedTasks = data.filter(task => task.columnL && task.columnL.trim() !== '')
-  
-  // Apply date filter to pending tasks
-  const pendingTasks = (() => {
-    const today = getTodayDate()
-    
-    switch (dateFilter) {
-      case "today":
-        return allPendingTasks.filter(task => task.columnJ === today)
-      case "overdue":
-        return allPendingTasks.filter(task => {
-          if (!task.columnJ) return false
-          return task.columnJ < today
-        })
-      case "upcoming":
-        return allPendingTasks.filter(task => {
-          if (!task.columnJ) return false
-          return task.columnJ > today
-        })
-      case "all":
-      default:
-        return allPendingTasks
+  const allPendingTasks = data.filter((task) => !task.columnL || task.columnL.trim() === "")
+  const completedTasks = data.filter((task) => task.columnL && task.columnL.trim() !== "")
+
+  // Helper function to convert date string to yyyy-mm-dd format for comparison
+  const normalizeDate = (dateString: string) => {
+    if (!dateString) return ""
+    console.log("Input date string:", dateString, "Type:", typeof dateString)
+
+    // If it's already in yyyy-mm-dd format, return as is
+    if (dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      console.log("Already in yyyy-mm-dd format:", dateString)
+      return dateString
     }
-  })()
+
+    // If it's in dd/mm/yyyy format, convert to yyyy-mm-dd
+    if (dateString.includes("/")) {
+      const parts = dateString.split("/")
+      if (parts.length === 3) {
+        const day = parts[0].padStart(2, "0")
+        const month = parts[1].padStart(2, "0")
+        const year = parts[2]
+        const normalized = `${year}-${month}-${day}`
+        console.log("Converted dd/mm/yyyy to yyyy-mm-dd:", dateString, "->", normalized)
+        return normalized
+      }
+    }
+
+    // Try to parse as date and convert
+    try {
+      const date = new Date(dateString)
+      if (!isNaN(date.getTime())) {
+        const normalized = date.toISOString().split("T")[0]
+        console.log("Parsed and converted date:", dateString, "->", normalized)
+        return normalized
+      }
+    } catch (error) {
+      console.log("Date parsing failed:", error)
+    }
+
+    console.log("Could not normalize date, returning original:", dateString)
+    return dateString
+  }
+
+  // Apply date filter to pending tasks
+  // Apply date filter to pending tasks based on Column O text values
+// Apply date filter to pending tasks based on Column O text values
+const dateFilteredPendingTasks = (() => {
+  console.log("Applying filter:", dateFilter)
+  
+  switch (dateFilter) {
+    case "today":
+      return allPendingTasks.filter(task => {
+        const columnOValue = task.columnO?.toLowerCase().trim() || ''
+        console.log(`Task ${task.taskId}: Column O value: "${task.columnO}", Match today: ${columnOValue === 'today'}`)
+        return columnOValue === 'today'
+      })
+    case "overdue":
+      return allPendingTasks.filter(task => {
+        const columnOValue = task.columnO?.toLowerCase().trim() || ''
+        console.log(`Task ${task.taskId}: Column O value: "${task.columnO}", Match overdue: ${columnOValue === 'overdue'}`)
+        return columnOValue === 'overdue'
+      })
+    case "upcoming":
+      return allPendingTasks.filter(task => {
+        const columnOValue = task.columnO?.toLowerCase().trim() || ''
+        console.log(`Task ${task.taskId}: Column O value: "${task.columnO}", Match upcoming: ${columnOValue === 'upcoming'}`)
+        return columnOValue === 'upcoming'
+      })
+    case "all":
+    default:
+      return allPendingTasks
+  }
+})()
+
+  // Apply search filter to both pending and completed tasks
+  const pendingTasks = filterTasksBySearch(dateFilteredPendingTasks)
+  const searchFilteredCompletedTasks = filterTasksBySearch(completedTasks)
 
   if (loading) {
     return (
@@ -305,160 +390,265 @@ const handleSubmit = async () => {
   }
 
   return (
-    <div>
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
-        <h2 className="text-2xl font-bold">Tasks</h2>
-        <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center w-full sm:w-auto">
-          <Select value={dateFilter} onValueChange={setDateFilter}>
-            <SelectTrigger className="w-full sm:w-40">
-              <SelectValue placeholder="Filter tasks..." />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Tasks</SelectItem>
-              <SelectItem value="today">Today Tasks</SelectItem>
-              <SelectItem value="overdue">Overdue Tasks</SelectItem>
-              <SelectItem value="upcoming">Upcoming Tasks</SelectItem>
-            </SelectContent>
-          </Select>
-          <Button 
-            onClick={handleSubmit} 
-            disabled={submitting || Object.values(taskUpdates).filter(u => u.isSelected).length === 0}
-            className="bg-blue-600 hover:bg-blue-700 w-full sm:w-auto"
-          >
-            {submitting ? "Updating..." : "Submit Updates"}
-          </Button>
-          <Button onClick={fetchData} variant="outline" size="sm" className="w-full sm:w-auto">
-            <RefreshCw className="h-4 w-4 mr-2" />
-            Refresh
-          </Button>
+    <div className="w-full max-w-full">
+      <div className="flex flex-col gap-4 mb-6">
+        <h2 className="text-xl sm:text-2xl font-bold">Tasks</h2>
+        <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
+          {/* Search Input */}
+          <div className="relative flex-1 min-w-0">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+            <Input
+              type="text"
+              placeholder="Search tasks..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10 w-full"
+            />
+          </div>
+          <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+            <Select value={dateFilter} onValueChange={setDateFilter}>
+              <SelectTrigger className="w-full sm:w-40">
+                <SelectValue placeholder="Filter tasks..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Tasks</SelectItem>
+                <SelectItem value="today">Today Tasks</SelectItem>
+                <SelectItem value="overdue">Overdue Tasks</SelectItem>
+                <SelectItem value="upcoming">Upcoming Tasks</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button
+              onClick={handleSubmit}
+              disabled={submitting || Object.values(taskUpdates).filter((u) => u.isSelected).length === 0}
+              className="bg-blue-600 hover:bg-blue-700 whitespace-nowrap"
+            >
+              {submitting ? "Updating..." : "Submit Updates"}
+            </Button>
+            <Button onClick={fetchData} variant="outline" size="sm" className="whitespace-nowrap bg-transparent">
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Refresh
+            </Button>
+          </div>
         </div>
       </div>
 
       <Tabs defaultValue="pending" className="w-full">
         <TabsList className="grid w-full grid-cols-2 mb-6">
-          <TabsTrigger value="pending" className="flex items-center gap-2">
+          <TabsTrigger value="pending" className="flex items-center gap-2 text-xs sm:text-sm">
             <Clock className="h-4 w-4" />
-            Pending ({pendingTasks.length})
+            <span className="hidden sm:inline">Pending</span>
+            <span className="sm:hidden">Pending</span>({pendingTasks.length})
             {dateFilter !== "all" && (
-              <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+              <span className="hidden lg:inline text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
                 {dateFilter === "today" ? "Today" : dateFilter === "overdue" ? "Overdue" : "Upcoming"}
               </span>
             )}
           </TabsTrigger>
-          <TabsTrigger value="history" className="flex items-center gap-2">
+          <TabsTrigger value="history" className="flex items-center gap-2 text-xs sm:text-sm">
             <CheckCircle className="h-4 w-4" />
-            History ({completedTasks.length})
+            <span className="hidden sm:inline">History</span>
+            <span className="sm:hidden">History</span>({searchFilteredCompletedTasks.length})
           </TabsTrigger>
         </TabsList>
 
         <TabsContent value="pending">
           <Card>
             <CardHeader>
-              <CardTitle>
-                Pending Tasks 
+              <CardTitle className="text-lg sm:text-xl">
+                Pending Tasks
                 {dateFilter !== "all" && (
                   <span className="text-sm font-normal text-gray-600 ml-2">
-                    (Filtered by: {dateFilter === "today" ? "Today" : dateFilter === "overdue" ? "Overdue" : "Upcoming"})
+                    (Filtered by: {dateFilter === "today" ? "Today" : dateFilter === "overdue" ? "Overdue" : "Upcoming"}
+                    )
                   </span>
                 )}
+                {searchTerm && <span className="text-sm font-normal text-gray-600 ml-2">- Search: "{searchTerm}"</span>}
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
-                <div className="min-w-full">
-                  <table className="w-full border-collapse min-w-[1000px]">
-                    <thead>
-                      <tr className="border-b">
-                        <th className="text-left p-2 font-semibold min-w-[60px]">Select</th>
-                        <th className="text-left p-2 font-semibold min-w-[100px]">Task ID</th>
-                        <th className="text-left p-2 font-semibold min-w-[120px]">Doer Name</th>
-                        <th className="text-left p-2 font-semibold min-w-[200px]">Task</th>
-                        <th className="text-left p-2 font-semibold min-w-[100px]">Original Date</th>
-                        <th className="text-left p-2 font-semibold min-w-[100px]">Due Date</th>
-                        <th className="text-left p-2 font-semibold min-w-[100px]">Current Status</th>
-                        <th className="text-left p-2 font-semibold min-w-[120px]">Action</th>
-                        <th className="text-left p-2 font-semibold min-w-[140px]">Extend Date</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {pendingTasks.length > 0 ? (
-                        pendingTasks.map((row) => {
-                          const update = taskUpdates[row.taskId] || { taskId: row.taskId, status: '', extendDate: '', isSelected: false }
-                          return (
-                            <tr key={row.id} className="border-b hover:bg-gray-50">
-                              <td className="p-2">
-                                <Checkbox 
+            <CardContent className="p-0 sm:p-6">
+              {/* Mobile Card View */}
+              <div className="block lg:hidden">
+                {pendingTasks.length > 0 ? (
+                  <div className="space-y-4 p-4">
+                    {pendingTasks.map((row) => {
+                      const update = taskUpdates[row.taskId] || {
+                        taskId: row.taskId,
+                        status: "",
+                        extendDate: "",
+                        isSelected: false,
+                      }
+                      return (
+                        <Card key={row.id} className="border border-gray-200">
+                          <CardContent className="p-4 space-y-3">
+                            <div className="flex items-start justify-between">
+                              <div className="flex items-center gap-2">
+                                <Checkbox
                                   checked={update.isSelected}
                                   onCheckedChange={(checked) => handleCheckboxChange(row.taskId, checked as boolean)}
                                 />
-                              </td>
-                              <td className="p-2 font-medium text-blue-600 text-sm">{row.taskId}</td>
-                              <td className="p-2 font-medium text-sm">{row.doerName}</td>
-                              <td className="p-2 text-sm max-w-[200px] break-words">{row.task}</td>
-                              <td className="p-2">
-                                <Badge variant="outline" className="text-black text-xs whitespace-nowrap">
-                                  {formatDate(row.date)}
-                                </Badge>
-                              </td>
-                              <td className="p-2">
-                                <Badge 
-                                  variant="outline" 
-                                  className={`text-xs whitespace-nowrap ${
-                                    row.columnJ < getTodayDate() 
-                                      ? "bg-red-50 text-red-700 border-red-200" 
-                                      : row.columnJ === getTodayDate()
+                                <div>
+                                  <div className="font-medium text-blue-600 text-sm">{row.taskId}</div>
+                                  <div className="font-medium text-sm">{row.doerName}</div>
+                                </div>
+                              </div>
+                              <Badge
+                                variant="outline"
+                                className={`text-xs whitespace-nowrap ${
+                                  normalizeDate(row.columnJ) < getTodayDate()
+                                    ? "bg-red-50 text-red-700 border-red-200"
+                                    : normalizeDate(row.columnJ) === getTodayDate()
                                       ? "bg-blue-50 text-blue-700 border-blue-200"
                                       : "bg-gray-50 text-gray-700"
-                                  }`}
-                                >
-                                  {formatDate(row.columnJ)}
-                                </Badge>
-                              </td>
-                              <td className="p-2">
-                                <Badge variant="secondary" className={`text-xs ${getStatusBadgeColor(row.status)}`}>
-                                  {row.status || "Pending"}
-                                </Badge>
-                              </td>
-                              <td className="p-2">
-                                <Select 
-                                  value={update.status} 
-                                  onValueChange={(value) => handleStatusChange(row.taskId, value)}
-                                  disabled={!update.isSelected}
-                                >
-                                  <SelectTrigger className="w-full min-w-[100px] h-8 text-xs">
-                                    <SelectValue placeholder="Select..." />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="Done">Done</SelectItem>
-                                    <SelectItem value="Extend">Extend</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                              </td>
-                              <td className="p-2">
+                                }`}
+                              >
+                                {formatDate(row.columnJ)}
+                              </Badge>
+                            </div>
+
+                            <div className="text-sm text-gray-700 break-words">{row.task}</div>
+
+                            <div className="flex items-center gap-2">
+                              <Badge variant="secondary" className={`text-xs ${getStatusBadgeColor(row.status)}`}>
+                                {row.status || "Pending"}
+                              </Badge>
+                            </div>
+
+                            <div className="space-y-2">
+                              <Select
+                                value={update.status}
+                                onValueChange={(value) => handleStatusChange(row.taskId, value)}
+                                disabled={!update.isSelected}
+                              >
+                                <SelectTrigger className="w-full h-8 text-xs">
+                                  <SelectValue placeholder="Select action..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="Done">Done</SelectItem>
+                                  <SelectItem value="Extend">Extend</SelectItem>
+                                </SelectContent>
+                              </Select>
+
+                              {update.status === "Extend" && (
                                 <Input
                                   type="date"
                                   value={update.extendDate}
                                   onChange={(e) => handleExtendDateChange(row.taskId, e.target.value)}
-                                  disabled={!update.isSelected || update.status !== 'Extend'}
-                                  className="w-full min-w-[130px] h-8 text-xs"
+                                  disabled={!update.isSelected}
+                                  className="w-full h-8 text-xs"
+                                  placeholder="Select extend date"
                                 />
-                              </td>
-                            </tr>
-                          )
-                        })
-                      ) : (
-                        <tr>
-                          <td colSpan={9} className="text-center py-8 text-gray-500">
-                            {dateFilter === "all" 
-                              ? "No pending tasks found." 
-                              : `No ${dateFilter} pending tasks found.`
-                            }
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
+                              )}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      )
+                    })}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-gray-500 px-4">
+                    {searchTerm
+                      ? `No tasks found matching "${searchTerm}"`
+                      : dateFilter === "all"
+                        ? "No pending tasks found."
+                        : `No ${dateFilter} pending tasks found.`}
+                  </div>
+                )}
+              </div>
+
+              {/* Desktop Table View */}
+              <div className="hidden lg:block overflow-x-auto">
+                <table className="w-full border-collapse">
+                  <thead>
+                    <tr className="border-b">
+                      <th className="text-left p-3 font-semibold">Select</th>
+                      <th className="text-left p-3 font-semibold">Task ID</th>
+                      <th className="text-left p-3 font-semibold">Doer Name</th>
+                      <th className="text-left p-3 font-semibold">Task</th>
+                      <th className="text-left p-3 font-semibold">Date</th>
+                      <th className="text-left p-3 font-semibold">Current Status</th>
+                      <th className="text-left p-3 font-semibold">Action</th>
+                      <th className="text-left p-3 font-semibold">Extend Date</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pendingTasks.length > 0 ? (
+                      pendingTasks.map((row) => {
+                        const update = taskUpdates[row.taskId] || {
+                          taskId: row.taskId,
+                          status: "",
+                          extendDate: "",
+                          isSelected: false,
+                        }
+                        return (
+                          <tr key={row.id} className="border-b hover:bg-gray-50">
+                            <td className="p-3">
+                              <Checkbox
+                                checked={update.isSelected}
+                                onCheckedChange={(checked) => handleCheckboxChange(row.taskId, checked as boolean)}
+                              />
+                            </td>
+                            <td className="p-3 font-medium text-blue-600 text-sm">{row.taskId}</td>
+                            <td className="p-3 font-medium text-sm">{row.doerName}</td>
+                            <td className="p-3 text-sm max-w-[200px] break-words">{row.task}</td>
+                            <td className="p-3">
+                              <Badge
+                                variant="outline"
+                                className={`text-xs whitespace-nowrap ${
+                                  normalizeDate(row.columnJ) < getTodayDate()
+                                    ? "bg-red-50 text-red-700 border-red-200"
+                                    : normalizeDate(row.columnJ) === getTodayDate()
+                                      ? "bg-blue-50 text-blue-700 border-blue-200"
+                                      : "bg-gray-50 text-gray-700"
+                                }`}
+                              >
+                                {formatDate(row.columnJ)}
+                              </Badge>
+                            </td>
+                            <td className="p-3">
+                              <Badge variant="secondary" className={`text-xs ${getStatusBadgeColor(row.status)}`}>
+                                {row.status || "Pending"}
+                              </Badge>
+                            </td>
+                            <td className="p-3">
+                              <Select
+                                value={update.status}
+                                onValueChange={(value) => handleStatusChange(row.taskId, value)}
+                                disabled={!update.isSelected}
+                              >
+                                <SelectTrigger className="w-full min-w-[100px] h-8 text-xs">
+                                  <SelectValue placeholder="Select..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="Done">Done</SelectItem>
+                                  <SelectItem value="Extend">Extend</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </td>
+                            <td className="p-3">
+                              <Input
+                                type="date"
+                                value={update.extendDate}
+                                onChange={(e) => handleExtendDateChange(row.taskId, e.target.value)}
+                                disabled={!update.isSelected || update.status !== "Extend"}
+                                className="w-full min-w-[130px] h-8 text-xs"
+                              />
+                            </td>
+                          </tr>
+                        )
+                      })
+                    ) : (
+                      <tr>
+                        <td colSpan={8} className="text-center py-8 text-gray-500">
+                          {searchTerm
+                            ? `No tasks found matching "${searchTerm}"`
+                            : dateFilter === "all"
+                              ? "No pending tasks found."
+                              : `No ${dateFilter} pending tasks found.`}
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
               </div>
             </CardContent>
           </Card>
@@ -467,56 +657,116 @@ const handleSubmit = async () => {
         <TabsContent value="history">
           <Card>
             <CardHeader>
-              <CardTitle>Completed Tasks</CardTitle>
+              <CardTitle className="text-lg sm:text-xl">
+                Completed Tasks
+                {searchTerm && <span className="text-sm font-normal text-gray-600 ml-2">- Search: "{searchTerm}"</span>}
+              </CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
-                <div className="min-w-full">
-                  <table className="w-full border-collapse min-w-[800px]">
-                    <thead>
-                      <tr className="border-b">
-                        <th className="text-left p-2 font-semibold min-w-[100px]">Task ID</th>
-                        <th className="text-left p-2 font-semibold min-w-[120px]">Doer Name</th>
-                        <th className="text-left p-2 font-semibold min-w-[200px]">Task</th>
-                        <th className="text-left p-2 font-semibold min-w-[100px]">Date</th>
-                        <th className="text-left p-2 font-semibold min-w-[100px]">Status</th>
-                        <th className="text-left p-2 font-semibold min-w-[120px]">Completion Date</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {completedTasks.length > 0 ? (
-                        completedTasks.map((row) => (
-                          <tr key={row.id} className="border-b hover:bg-gray-50">
-                            <td className="p-2 font-medium text-blue-600 text-sm">{row.taskId}</td>
-                            <td className="p-2 font-medium text-sm">{row.doerName}</td>
-                            <td className="p-2 text-sm max-w-[200px] break-words">{row.task}</td>
-                            <td className="p-2">
-                              <Badge variant="outline" className="text-black text-xs whitespace-nowrap">
-                                {formatDate(row.date)}
-                              </Badge>
-                            </td>
-                            <td className="p-2">
-                              <Badge variant="secondary" className={`text-xs ${getStatusBadgeColor(row.status)}`}>
-                                {row.status || "Completed"}
-                              </Badge>
-                            </td>
-                            <td className="p-2">
-                              <Badge variant="outline" className="bg-green-50 text-green-700 text-xs whitespace-nowrap">
-                                {formatDate(row.columnL)}
-                              </Badge>
-                            </td>
-                          </tr>
-                        ))
-                      ) : (
-                        <tr>
-                          <td colSpan={6} className="text-center py-8 text-gray-500">
-                            No completed tasks found.
+            <CardContent className="p-0 sm:p-6">
+              {/* Mobile Card View */}
+              <div className="block lg:hidden">
+                {searchFilteredCompletedTasks.length > 0 ? (
+                  <div className="space-y-4 p-4">
+                    {searchFilteredCompletedTasks.map((row) => (
+                      <Card key={row.id} className="border border-gray-200">
+                        <CardContent className="p-4 space-y-3">
+                          <div className="flex items-start justify-between">
+                            <div>
+                              <div className="font-medium text-blue-600 text-sm">{row.taskId}</div>
+                              <div className="font-medium text-sm">{row.doerName}</div>
+                            </div>
+                            <Badge
+                              variant="outline"
+                              className={`text-xs whitespace-nowrap ${
+                                normalizeDate(row.columnJ) < getTodayDate()
+                                  ? "bg-red-50 text-red-700 border-red-200"
+                                  : normalizeDate(row.columnJ) === getTodayDate()
+                                    ? "bg-blue-50 text-blue-700 border-blue-200"
+                                    : "bg-gray-50 text-gray-700"
+                              }`}
+                            >
+                              {formatDate(row.columnJ)}
+                            </Badge>
+                          </div>
+
+                          <div className="text-sm text-gray-700 break-words">{row.task}</div>
+
+                          <div className="flex items-center justify-between">
+                            <Badge variant="secondary" className={`text-xs ${getStatusBadgeColor(row.status)}`}>
+                              {row.status || "Completed"}
+                            </Badge>
+                            <Badge variant="outline" className="bg-green-50 text-green-700 text-xs whitespace-nowrap">
+                              {formatDate(row.columnL)}
+                            </Badge>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-gray-500 px-4">
+                    {searchTerm ? `No completed tasks found matching "${searchTerm}"` : "No completed tasks found."}
+                  </div>
+                )}
+              </div>
+
+              {/* Desktop Table View */}
+              <div className="hidden lg:block overflow-x-auto">
+                <table className="w-full border-collapse">
+                  <thead>
+                    <tr className="border-b">
+                      <th className="text-left p-3 font-semibold">Task ID</th>
+                      <th className="text-left p-3 font-semibold">Doer Name</th>
+                      <th className="text-left p-3 font-semibold">Task</th>
+                      <th className="text-left p-3 font-semibold">Date</th>
+                      <th className="text-left p-3 font-semibold">Status</th>
+                      <th className="text-left p-3 font-semibold">Completion Date</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {searchFilteredCompletedTasks.length > 0 ? (
+                      searchFilteredCompletedTasks.map((row) => (
+                        <tr key={row.id} className="border-b hover:bg-gray-50">
+                          <td className="p-3 font-medium text-blue-600 text-sm">{row.taskId}</td>
+                          <td className="p-3 font-medium text-sm">{row.doerName}</td>
+                          <td className="p-3 text-sm max-w-[200px] break-words">{row.task}</td>
+                          <td className="p-3">
+                            <Badge
+                              variant="outline"
+                              className={`text-xs whitespace-nowrap ${
+                                normalizeDate(row.columnJ) < getTodayDate()
+                                  ? "bg-red-50 text-red-700 border-red-200"
+                                  : normalizeDate(row.columnJ) === getTodayDate()
+                                    ? "bg-blue-50 text-blue-700 border-blue-200"
+                                    : "bg-gray-50 text-gray-700"
+                              }`}
+                            >
+                              {formatDate(row.columnJ)}
+                            </Badge>
+                          </td>
+                          <td className="p-3">
+                            <Badge variant="secondary" className={`text-xs ${getStatusBadgeColor(row.status)}`}>
+                              {row.status || "Completed"}
+                            </Badge>
+                          </td>
+                          <td className="p-3">
+                            <Badge variant="outline" className="bg-green-50 text-green-700 text-xs whitespace-nowrap">
+                              {formatDate(row.columnL)}
+                            </Badge>
                           </td>
                         </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={6} className="text-center py-8 text-gray-500">
+                          {searchTerm
+                            ? `No completed tasks found matching "${searchTerm}"`
+                            : "No completed tasks found."}
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
               </div>
             </CardContent>
           </Card>
@@ -525,3 +775,601 @@ const handleSubmit = async () => {
     </div>
   )
 }
+
+
+
+
+
+
+
+
+
+// "use client"
+// import { useState, useEffect } from "react"
+// import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+// import { Badge } from "@/components/ui/badge"
+// import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+// import { Clock, CheckCircle, RefreshCw } from "lucide-react"
+// import { Button } from "@/components/ui/button"
+// import { Checkbox } from "@/components/ui/checkbox"
+// import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+// import { Input } from "@/components/ui/input"
+
+// interface SheetRow {
+//   id: number
+//   rowIndex: number // Actual row index in sheet (for updates)
+//   taskId: string
+//   doerName: string
+//   task: string
+//   date: string
+//   columnJ: string // Column J date for filtering
+//   columnK: string // Column K value for determining extend column
+//   status: string
+//   columnL: string // This will determine pending vs history
+// }
+
+
+// interface TaskUpdate {
+//   taskId: string
+//   status: string
+//   extendDate: string
+//   isSelected: boolean
+// }
+
+// export default function TasksView() {
+//   const [data, setData] = useState<SheetRow[]>([])
+//   const [loading, setLoading] = useState(true)
+//   const [error, setError] = useState<string | null>(null)
+//   const [submitting, setSubmitting] = useState(false)
+//   const [taskUpdates, setTaskUpdates] = useState<{[key: string]: TaskUpdate}>({})
+//   const [dateFilter, setDateFilter] = useState<string>("all") // Add this missing state
+
+//   // Fetch data from Google Sheets
+//   const fetchData = async () => {
+//     setLoading(true)
+//     setError(null)
+    
+//     try {
+//       console.log("Fetching data from Google Sheets...")
+      
+//       // First, let's test without sheet parameter to see what sheets are available
+//       const testResponse = await fetch("https://script.google.com/macros/s/AKfycbw7DWi7erjdmCnV2BQNCf-XG4W4k8XTUgx8QnVZukiGOU6CEeegkqrLb95m91BL2Nvh/exec")
+//       const testResult = await testResponse.json()
+//       console.log("Test response (no sheet param):", testResult)
+      
+//       // Now try with Master sheet
+//       const response = await fetch("https://script.google.com/macros/s/AKfycbw7DWi7erjdmCnV2BQNCf-XG4W4k8XTUgx8QnVZukiGOU6CEeegkqrLb95m91BL2Nvh/exec?sheet=Master&action=fetch")
+      
+//       if (!response.ok) {
+//         throw new Error(`HTTP error! status: ${response.status}`)
+//       }
+      
+//       const result = await response.json()
+//       console.log("Response from Google Apps Script:", result)
+      
+//       if (result.success && result.data) {
+//         // Skip header row and map the data
+//         const mappedData = result.data.slice(1).map((row: any[], index: number) => ({
+//           id: index,
+//           rowIndex: index + 2, // +2 because we skip header and arrays are 0-based but sheets are 1-based
+//           taskId: row[0] || '', // Column A
+//           doerName: row[1] || '', // Column B
+//           task: row[2] || '', // Column C
+//           date: row[3] || '', // Column D
+//           columnJ: row[9] || '', // Column J (index 9) - this is the date we'll filter by
+//           columnK: row[10] || '0', // Column K (index 10) - this determines which column to update for extend
+//           status: row[12] || '', // Column M
+//           columnL: row[11] || '' // Column L (index 11 since array is 0-based)
+//         })).filter((row: SheetRow) => row.taskId) // Filter out empty rows
+        
+//         console.log("Mapped data:", mappedData)
+//         setData(mappedData)
+//       } else {
+//         throw new Error(result.error || 'Failed to fetch data')
+//       }
+//     } catch (err) {
+//       console.error("Error fetching data:", err)
+//       setError(`Failed to load tasks: ${err instanceof Error ? err.message : 'Unknown error'}`)
+//     } finally {
+//       setLoading(false)
+//     }
+//   }
+
+//   // Load data on component mount
+//   useEffect(() => {
+//     fetchData()
+//   }, [])
+
+//   // Handle checkbox change
+//   const handleCheckboxChange = (taskId: string, checked: boolean) => {
+//     setTaskUpdates(prev => ({
+//       ...prev,
+//       [taskId]: {
+//         ...prev[taskId],
+//         taskId,
+//         isSelected: checked,
+//         status: prev[taskId]?.status || '',
+//         extendDate: prev[taskId]?.extendDate || ''
+//       }
+//     }))
+//   }
+
+//   // Handle status change
+//   const handleStatusChange = (taskId: string, status: string) => {
+//     setTaskUpdates(prev => ({
+//       ...prev,
+//       [taskId]: {
+//         ...prev[taskId],
+//         taskId,
+//         status,
+//         isSelected: prev[taskId]?.isSelected || false,
+//         extendDate: status === 'Done' ? '' : prev[taskId]?.extendDate || ''
+//       }
+//     }))
+//   }
+
+//   // Handle extend date change
+//   const handleExtendDateChange = (taskId: string, date: string) => {
+//     setTaskUpdates(prev => ({
+//       ...prev,
+//       [taskId]: {
+//         ...prev[taskId],
+//         taskId,
+//         extendDate: date,
+//         isSelected: prev[taskId]?.isSelected || false,
+//         status: prev[taskId]?.status || ''
+//       }
+//     }))
+//   }
+
+//   // Submit updates
+// // Submit updates
+// const handleSubmit = async () => {
+//   const selectedTasks = Object.values(taskUpdates).filter(update => update.isSelected && update.status)
+  
+//   if (selectedTasks.length === 0) {
+//     alert("Please select tasks and set their status before submitting.")
+//     return
+//   }
+
+//   setSubmitting(true)
+  
+//   try {
+//     for (const update of selectedTasks) {
+//       const task = data.find(t => t.taskId === update.taskId)
+//       if (!task) continue
+
+//       const formData = new FormData()
+//       formData.append('sheetName', 'Master')
+      
+//       if (update.status === 'Done') {
+//         // For Done: Update Column L with current date and Column M with "Complete"
+//         formData.append('action', 'update')
+//         formData.append('rowIndex', task.rowIndex.toString())
+        
+//         // Create array for the row with current values, updating only L and M
+//         const rowData = new Array(13).fill('')
+//         rowData[11] = new Date().toISOString().split('T')[0] // Column L - current date
+//         rowData[12] = 'Complete' // Column M - status
+        
+//         formData.append('rowData', JSON.stringify(rowData))
+//       } else if (update.status === 'Extend' && update.extendDate) {
+//         // For Extend: Check Column K value to determine target column
+//         formData.append('action', 'update')
+//         formData.append('rowIndex', task.rowIndex.toString())
+        
+//         // Get Column K value (index 10)
+//         const columnKValue = task.columnK || '0' // Default to 0 if not present
+        
+//         // Create array for the row with current values
+//         const rowData = new Array(13).fill('')
+        
+//         // Determine which column to update based on Column K value
+//         switch (columnKValue.toString()) {
+//           case '0':
+//             rowData[4] = update.extendDate // Column E
+//             break
+//           case '1':
+//             rowData[5] = update.extendDate // Column F
+//             break
+//           case '2':
+//             rowData[6] = update.extendDate // Column G
+//             break
+//           case '3':
+//             rowData[7] = update.extendDate // Column H
+//             break
+//           case '4':
+//             rowData[8] = update.extendDate // Column I
+//             break
+//           default:
+//             rowData[4] = update.extendDate // Default to Column E
+//             break
+//         }
+        
+//         formData.append('rowData', JSON.stringify(rowData))
+//       }
+
+//       const response = await fetch("https://script.google.com/macros/s/AKfycbw7DWi7erjdmCnV2BQNCf-XG4W4k8XTUgx8QnVZukiGOU6CEeegkqrLb95m91BL2Nvh/exec", {
+//         method: 'POST',
+//         body: formData
+//       })
+
+//       const result = await response.json()
+//       if (!result.success) {
+//         throw new Error(`Failed to update task ${update.taskId}: ${result.error}`)
+//       }
+//     }
+
+//     alert("Tasks updated successfully!")
+//     setTaskUpdates({}) // Clear selections
+//     await fetchData() // Refresh data
+//   } catch (err) {
+//     console.error("Error updating tasks:", err)
+//     alert(`Error updating tasks: ${err instanceof Error ? err.message : 'Unknown error'}`)
+//   } finally {
+//     setSubmitting(false)
+//   }
+// }
+
+//   // Get status badge color
+//   const getStatusBadgeColor = (status: string): string => {
+//     if (!status || status === "") return "bg-orange-100 text-orange-800"
+//     const statusLower = status.toLowerCase()
+//     if (statusLower.includes("completed") || statusLower.includes("complete")) return "bg-green-100 text-green-800"
+//     if (statusLower.includes("pending")) return "bg-orange-100 text-orange-800"
+//     if (statusLower.includes("progress") || statusLower.includes("ongoing")) return "bg-yellow-100 text-yellow-800"
+//     if (statusLower.includes("cancelled")) return "bg-red-100 text-red-800"
+//     return "bg-gray-100 text-gray-800"
+//   }
+
+//   // Get today's date in YYYY-MM-DD format
+//   const getTodayDate = () => {
+//     return new Date().toISOString().split('T')[0]
+//   }
+
+//   // Format date to dd/mm/yyyy - if already in dd/mm/yyyy format, return as is
+//   const formatDate = (dateString: string) => {
+//     if (!dateString) return "No date"
+    
+//     // If it's already in dd/mm/yyyy format, return as is
+//     if (dateString.match(/^\d{1,2}\/\d{1,2}\/\d{4}$/)) {
+//       return dateString
+//     }
+    
+//     try {
+//       const date = new Date(dateString)
+//       if (!isNaN(date.getTime())) {
+//         const day = date.getDate().toString().padStart(2, '0')
+//         const month = (date.getMonth() + 1).toString().padStart(2, '0')
+//         const year = date.getFullYear()
+//         return `${day}/${month}/${year}`
+//       }
+//     } catch {
+//       // If parsing fails, return original string
+//     }
+    
+//     return dateString
+//   }
+
+//   // Filter tasks based on column L
+//   const allPendingTasks = data.filter(task => !task.columnL || task.columnL.trim() === '')
+//   const completedTasks = data.filter(task => task.columnL && task.columnL.trim() !== '')
+  
+//   // Helper function to convert date string to yyyy-mm-dd format for comparison
+//   const normalizeDate = (dateString: string) => {
+//     if (!dateString) return ""
+    
+//     console.log("Input date string:", dateString, "Type:", typeof dateString)
+    
+//     // If it's already in yyyy-mm-dd format, return as is
+//     if (dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
+//       console.log("Already in yyyy-mm-dd format:", dateString)
+//       return dateString
+//     }
+    
+//     // If it's in dd/mm/yyyy format, convert to yyyy-mm-dd
+//     if (dateString.includes('/')) {
+//       const parts = dateString.split('/')
+//       if (parts.length === 3) {
+//         const day = parts[0].padStart(2, '0')
+//         const month = parts[1].padStart(2, '0')
+//         const year = parts[2]
+//         const normalized = `${year}-${month}-${day}`
+//         console.log("Converted dd/mm/yyyy to yyyy-mm-dd:", dateString, "->", normalized)
+//         return normalized
+//       }
+//     }
+    
+//     // Try to parse as date and convert
+//     try {
+//       const date = new Date(dateString)
+//       if (!isNaN(date.getTime())) {
+//         const normalized = date.toISOString().split('T')[0]
+//         console.log("Parsed and converted date:", dateString, "->", normalized)
+//         return normalized
+//       }
+//     } catch (error) {
+//       console.log("Date parsing failed:", error)
+//     }
+    
+//     console.log("Could not normalize date, returning original:", dateString)
+//     return dateString
+//   }
+
+//   // Apply date filter to pending tasks
+//   const pendingTasks = (() => {
+//     const today = getTodayDate()
+//     console.log("Today's date (yyyy-mm-dd):", today)
+    
+//     switch (dateFilter) {
+//       case "today":
+//         return allPendingTasks.filter(task => {
+//           const normalizedDate = normalizeDate(task.columnJ)
+//           console.log(`Task ${task.taskId}: Original date: ${task.columnJ}, Normalized: ${normalizedDate}, Today: ${today}, Match: ${normalizedDate === today}`)
+//           return normalizedDate === today
+//         })
+//       case "overdue":
+//         return allPendingTasks.filter(task => {
+//           if (!task.columnJ) return false
+//           const normalizedDate = normalizeDate(task.columnJ)
+//           console.log(`Task ${task.taskId}: Original date: ${task.columnJ}, Normalized: ${normalizedDate}, Today: ${today}, Overdue: ${normalizedDate < today}`)
+//           return normalizedDate < today
+//         })
+//       case "upcoming":
+//         return allPendingTasks.filter(task => {
+//           if (!task.columnJ) return false
+//           const normalizedDate = normalizeDate(task.columnJ)
+//           console.log(`Task ${task.taskId}: Original date: ${task.columnJ}, Normalized: ${normalizedDate}, Today: ${today}, Upcoming: ${normalizedDate > today}`)
+//           return normalizedDate > today
+//         })
+//       case "all":
+//       default:
+//         return allPendingTasks
+//     }
+//   })()
+
+//   if (loading) {
+//     return (
+//       <div className="flex items-center justify-center py-8">
+//         <RefreshCw className="h-6 w-6 animate-spin mr-2" />
+//         Loading tasks...
+//       </div>
+//     )
+//   }
+
+//   if (error) {
+//     return (
+//       <div className="text-center py-8">
+//         <p className="text-red-500 mb-4">{error}</p>
+//         <Button onClick={fetchData} variant="outline">
+//           <RefreshCw className="h-4 w-4 mr-2" />
+//           Retry
+//         </Button>
+//       </div>
+//     )
+//   }
+
+//   return (
+//     <div>
+//       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+//         <h2 className="text-2xl font-bold">Tasks</h2>
+//         <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center w-full sm:w-auto">
+//           <Select value={dateFilter} onValueChange={setDateFilter}>
+//             <SelectTrigger className="w-full sm:w-40">
+//               <SelectValue placeholder="Filter tasks..." />
+//             </SelectTrigger>
+//             <SelectContent>
+//               <SelectItem value="all">All Tasks</SelectItem>
+//               {/* <SelectItem value="today">Today Tasks</SelectItem> */}
+//               <SelectItem value="overdue">Overdue Tasks</SelectItem>
+//               <SelectItem value="upcoming">Upcoming Tasks</SelectItem>
+//             </SelectContent>
+//           </Select>
+//           <Button 
+//             onClick={handleSubmit} 
+//             disabled={submitting || Object.values(taskUpdates).filter(u => u.isSelected).length === 0}
+//             className="bg-blue-600 hover:bg-blue-700 w-full sm:w-auto"
+//           >
+//             {submitting ? "Updating..." : "Submit Updates"}
+//           </Button>
+//           <Button onClick={fetchData} variant="outline" size="sm" className="w-full sm:w-auto">
+//             <RefreshCw className="h-4 w-4 mr-2" />
+//             Refresh
+//           </Button>
+//         </div>
+//       </div>
+
+//       <Tabs defaultValue="pending" className="w-full">
+//         <TabsList className="grid w-full grid-cols-2 mb-6">
+//           <TabsTrigger value="pending" className="flex items-center gap-2">
+//             <Clock className="h-4 w-4" />
+//             Pending ({pendingTasks.length})
+//             {dateFilter !== "all" && (
+//               <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+//                 {dateFilter === "today" ? "Today" : dateFilter === "overdue" ? "Overdue" : "Upcoming"}
+//               </span>
+//             )}
+//           </TabsTrigger>
+//           <TabsTrigger value="history" className="flex items-center gap-2">
+//             <CheckCircle className="h-4 w-4" />
+//             History ({completedTasks.length})
+//           </TabsTrigger>
+//         </TabsList>
+
+//         <TabsContent value="pending">
+//           <Card>
+//             <CardHeader>
+//               <CardTitle>
+//                 Pending Tasks 
+//                 {dateFilter !== "all" && (
+//                   <span className="text-sm font-normal text-gray-600 ml-2">
+//                     (Filtered by: {dateFilter === "today" ? "Today" : dateFilter === "overdue" ? "Overdue" : "Upcoming"})
+//                   </span>
+//                 )}
+//               </CardTitle>
+//             </CardHeader>
+//             <CardContent>
+//               <div className="overflow-x-auto">
+//                 <div className="min-w-full">
+//                   <table className="w-full border-collapse min-w-[900px]">
+//                     <thead>
+//                       <tr className="border-b">
+//                         <th className="text-left p-2 font-semibold min-w-[60px]">Select</th>
+//                         <th className="text-left p-2 font-semibold min-w-[100px]">Task ID</th>
+//                         <th className="text-left p-2 font-semibold min-w-[120px]">Doer Name</th>
+//                         <th className="text-left p-2 font-semibold min-w-[200px]">Task</th>
+//                         <th className="text-left p-2 font-semibold min-w-[100px]">Date</th>
+//                         <th className="text-left p-2 font-semibold min-w-[100px]">Current Status</th>
+//                         <th className="text-left p-2 font-semibold min-w-[120px]">Action</th>
+//                         <th className="text-left p-2 font-semibold min-w-[140px]">Extend Date</th>
+//                       </tr>
+//                     </thead>
+//                     <tbody>
+//                       {pendingTasks.length > 0 ? (
+//                         pendingTasks.map((row) => {
+//                           const update = taskUpdates[row.taskId] || { taskId: row.taskId, status: '', extendDate: '', isSelected: false }
+//                           return (
+//                             <tr key={row.id} className="border-b hover:bg-gray-50">
+//                               <td className="p-2">
+//                                 <Checkbox 
+//                                   checked={update.isSelected}
+//                                   onCheckedChange={(checked) => handleCheckboxChange(row.taskId, checked as boolean)}
+//                                 />
+//                               </td>
+//                               <td className="p-2 font-medium text-blue-600 text-sm">{row.taskId}</td>
+//                               <td className="p-2 font-medium text-sm">{row.doerName}</td>
+//                               <td className="p-2 text-sm max-w-[200px] break-words">{row.task}</td>
+//                               <td className="p-2">
+//                                 <Badge 
+//                                   variant="outline" 
+//                                   className={`text-xs whitespace-nowrap ${
+//                                     normalizeDate(row.columnJ) < getTodayDate() 
+//                                       ? "bg-red-50 text-red-700 border-red-200" 
+//                                       : normalizeDate(row.columnJ) === getTodayDate()
+//                                       ? "bg-blue-50 text-blue-700 border-blue-200"
+//                                       : "bg-gray-50 text-gray-700"
+//                                   }`}
+//                                 >
+//                                   {formatDate(row.columnJ)}
+//                                 </Badge>
+//                               </td>
+//                               <td className="p-2">
+//                                 <Badge variant="secondary" className={`text-xs ${getStatusBadgeColor(row.status)}`}>
+//                                   {row.status || "Pending"}
+//                                 </Badge>
+//                               </td>
+//                               <td className="p-2">
+//                                 <Select 
+//                                   value={update.status} 
+//                                   onValueChange={(value) => handleStatusChange(row.taskId, value)}
+//                                   disabled={!update.isSelected}
+//                                 >
+//                                   <SelectTrigger className="w-full min-w-[100px] h-8 text-xs">
+//                                     <SelectValue placeholder="Select..." />
+//                                   </SelectTrigger>
+//                                   <SelectContent>
+//                                     <SelectItem value="Done">Done</SelectItem>
+//                                     <SelectItem value="Extend">Extend</SelectItem>
+//                                   </SelectContent>
+//                                 </Select>
+//                               </td>
+//                               <td className="p-2">
+//                                 <Input
+//                                   type="date"
+//                                   value={update.extendDate}
+//                                   onChange={(e) => handleExtendDateChange(row.taskId, e.target.value)}
+//                                   disabled={!update.isSelected || update.status !== 'Extend'}
+//                                   className="w-full min-w-[130px] h-8 text-xs"
+//                                 />
+//                               </td>
+//                             </tr>
+//                           )
+//                         })
+//                       ) : (
+//                         <tr>
+//                           <td colSpan={8} className="text-center py-8 text-gray-500">
+//                             {dateFilter === "all" 
+//                               ? "No pending tasks found." 
+//                               : `No ${dateFilter} pending tasks found.`
+//                             }
+//                           </td>
+//                         </tr>
+//                       )}
+//                     </tbody>
+//                   </table>
+//                 </div>
+//               </div>
+//             </CardContent>
+//           </Card>
+//         </TabsContent>
+
+//         <TabsContent value="history">
+//           <Card>
+//             <CardHeader>
+//               <CardTitle>Completed Tasks</CardTitle>
+//             </CardHeader>
+//             <CardContent>
+//               <div className="overflow-x-auto">
+//                 <div className="min-w-full">
+//                   <table className="w-full border-collapse min-w-[700px]">
+//                     <thead>
+//                       <tr className="border-b">
+//                         <th className="text-left p-2 font-semibold min-w-[100px]">Task ID</th>
+//                         <th className="text-left p-2 font-semibold min-w-[120px]">Doer Name</th>
+//                         <th className="text-left p-2 font-semibold min-w-[200px]">Task</th>
+//                         <th className="text-left p-2 font-semibold min-w-[100px]">Date</th>
+//                         <th className="text-left p-2 font-semibold min-w-[100px]">Status</th>
+//                         <th className="text-left p-2 font-semibold min-w-[120px]">Completion Date</th>
+//                       </tr>
+//                     </thead>
+//                     <tbody>
+//                       {completedTasks.length > 0 ? (
+//                         completedTasks.map((row) => (
+//                           <tr key={row.id} className="border-b hover:bg-gray-50">
+//                             <td className="p-2 font-medium text-blue-600 text-sm">{row.taskId}</td>
+//                             <td className="p-2 font-medium text-sm">{row.doerName}</td>
+//                             <td className="p-2 text-sm max-w-[200px] break-words">{row.task}</td>
+//                             <td className="p-2">
+//                               <Badge 
+//                                 variant="outline" 
+//                                 className={`text-xs whitespace-nowrap ${
+//                                   normalizeDate(row.columnJ) < getTodayDate() 
+//                                     ? "bg-red-50 text-red-700 border-red-200" 
+//                                     : normalizeDate(row.columnJ) === getTodayDate()
+//                                     ? "bg-blue-50 text-blue-700 border-blue-200"
+//                                     : "bg-gray-50 text-gray-700"
+//                                 }`}
+//                               >
+//                                 {formatDate(row.columnJ)}
+//                               </Badge>
+//                             </td>
+//                             <td className="p-2">
+//                               <Badge variant="secondary" className={`text-xs ${getStatusBadgeColor(row.status)}`}>
+//                                 {row.status || "Completed"}
+//                               </Badge>
+//                             </td>
+//                             <td className="p-2">
+//                               <Badge variant="outline" className="bg-green-50 text-green-700 text-xs whitespace-nowrap">
+//                                 {formatDate(row.columnL)}
+//                               </Badge>
+//                             </td>
+//                           </tr>
+//                         ))
+//                       ) : (
+//                         <tr>
+//                           <td colSpan={6} className="text-center py-8 text-gray-500">
+//                             No completed tasks found.
+//                           </td>
+//                         </tr>
+//                       )}
+//                     </tbody>
+//                   </table>
+//                 </div>
+//               </div>
+//             </CardContent>
+//           </Card>
+//         </TabsContent>
+//       </Tabs>
+//     </div>
+//   )
+// }
