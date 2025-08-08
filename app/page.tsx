@@ -142,7 +142,7 @@ export default function Dashboard() {
     let pending = 0
 
     dataArray.forEach((row) => {
-      const isCompleted = row.Status && row.Status.toLowerCase().includes("completed")
+      const isCompleted = row.Status && row.Status.toLowerCase().includes("complete")
       const revisions = row["Total Revisions"] || 0
 
       if (isCompleted) {
