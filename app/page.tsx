@@ -419,7 +419,7 @@ export default function Dashboard() {
             {activeSection === "add-task" && <AddTask />}
 
             {/* Tasks Section */}
-            {activeSection === "tasks" && <TasksView data={data} />}
+            {activeSection === "tasks" && <TasksView />}
           </main>
         </SidebarInset>
       </div>

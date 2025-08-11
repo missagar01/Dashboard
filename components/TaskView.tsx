@@ -1,14 +1,14 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Clock, CheckCircle, RefreshCw, Search } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { CheckCircle, Clock, RefreshCw, Search } from "lucide-react"
+import { memo, useCallback, useEffect, useMemo, useState } from "react"
 
 interface SheetRow {
   id: number
@@ -30,6 +30,7 @@ interface TaskUpdate {
   taskId: string
   status: string
   extendDate: string
+  remarks: string
   isSelected: boolean
 }
 
@@ -42,18 +43,23 @@ export default function TasksView() {
   const [dateFilter, setDateFilter] = useState<string>("all") // Add this missing state
   const [searchTerm, setSearchTerm] = useState<string>("") // Add search state
 
+  // Whether there is at least one selected task and all selected have non-empty remarks
+  const hasEligibleSelection = useMemo(() => {
+    const selected = Object.values(taskUpdates).filter((u) => u.isSelected)
+    if (selected.length === 0) return false
+    return selected.every((u) => u.remarks && u.remarks.trim().length > 0)
+  }, [taskUpdates])
+
   // Fetch data from Google Sheets
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      console.log("Fetching data from Google Sheets...")
       // First, let's test without sheet parameter to see what sheets are available
       const testResponse = await fetch(
         "https://script.google.com/macros/s/AKfycbw7DWi7erjdmCnV2BQNCf-XG4W4k8XTUgx8QnVZukiGOU6CEeegkqrLb95m91BL2Nvh/exec",
       )
       const testResult = await testResponse.json()
-      console.log("Test response (no sheet param):", testResult)
 
       // Now try with Master sheet
       const response = await fetch(
@@ -65,49 +71,46 @@ export default function TasksView() {
       }
 
       const result = await response.json()
-      console.log("Response from Google Apps Script:", result)
 
       if (result.success && result.data) {
         // Skip header row and map the data
         const mappedData = result.data
-  .slice(1)
-  .map((row: any[], index: number) => ({
-    id: index,
-    rowIndex: index + 2, // +2 because we skip header and arrays are 0-based but sheets are 1-based
-    taskId: row[0] || "", // Column A
-    week: row[13] || "", // Column M for week data
-    doerName: row[1] || "", // Column B
-    task: row[2] || "", // Column C
-    date: row[3] || "", // Column D
-    columnJ: row[9] || "", // Column J (index 9) - this is the date we'll filter by
-    columnK: row[10] || "0", // Column K (index 10) - this determines which column to update for extend
-    status: row[12] || "", // Column M for status as well
-    columnL: row[11] || "", // Column L (index 11 since array is 0-based)
-    columnM: row[12] || "", // Column M data
-    columnO: row[14] || "", // Add this line
-  }))
-  .filter((row: SheetRow) => row.taskId) // Filter out empty rows
+          .slice(1)
+          .map((row: any[], index: number) => ({
+            id: index,
+            rowIndex: index + 2, // +2 because we skip header and arrays are 0-based but sheets are 1-based
+            taskId: row[0] || "", // Column A
+            week: row[13] || "", // Column M for week data
+            doerName: row[1] || "", // Column B
+            task: row[2] || "", // Column C
+            date: row[3] || "", // Column D
+            columnJ: row[9] || "", // Column J (index 9) - this is the date we'll filter by
+            columnK: row[10] || "0", // Column K (index 10) - this determines which column to update for extend
+            status: row[12] || "", // Column M for status as well
+            columnL: row[11] || "", // Column L (index 11 since array is 0-based)
+            columnM: row[12] || "", // Column M data
+            columnO: row[14] || "", // Add this line
+          }))
+          .filter((row: SheetRow) => row.taskId) // Filter out empty rows
 
-        console.log("Mapped data:", mappedData)
         setData(mappedData)
       } else {
         throw new Error(result.error || "Failed to fetch data")
       }
     } catch (err) {
-      console.error("Error fetching data:", err)
       setError(`Failed to load tasks: ${err instanceof Error ? err.message : "Unknown error"}`)
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
 
   // Load data on component mount
   useEffect(() => {
     fetchData()
-  }, [])
+  }, [fetchData])
 
   // Handle checkbox change
-  const handleCheckboxChange = (taskId: string, checked: boolean) => {
+  const handleCheckboxChange = useCallback((taskId: string, checked: boolean) => {
     setTaskUpdates((prev) => ({
       ...prev,
       [taskId]: {
@@ -116,12 +119,13 @@ export default function TasksView() {
         isSelected: checked,
         status: prev[taskId]?.status || "",
         extendDate: prev[taskId]?.extendDate || "",
+        remarks: prev[taskId]?.remarks || "",
       },
     }))
-  }
+  }, [])
 
   // Handle status change
-  const handleStatusChange = (taskId: string, status: string) => {
+  const handleStatusChange = useCallback((taskId: string, status: string) => {
     setTaskUpdates((prev) => ({
       ...prev,
       [taskId]: {
@@ -129,13 +133,13 @@ export default function TasksView() {
         taskId,
         status,
         isSelected: prev[taskId]?.isSelected || false,
-        extendDate: status === "Done" ? "" : prev[taskId]?.extendDate || "",
+        extendDate: status === "Extend" ? prev[taskId]?.extendDate || "" : "",
       },
     }))
-  }
+  }, [])
 
   // Handle extend date change
-  const handleExtendDateChange = (taskId: string, date: string) => {
+  const handleExtendDateChange = useCallback((taskId: string, date: string) => {
     setTaskUpdates((prev) => ({
       ...prev,
       [taskId]: {
@@ -146,14 +150,30 @@ export default function TasksView() {
         status: prev[taskId]?.status || "",
       },
     }))
-  }
+  }, [])
+
+  // Handle remarks change
+  const handleRemarksChange = useCallback((taskId: string, text: string) => {
+    setTaskUpdates((prev) => ({
+      ...prev,
+      [taskId]: {
+        ...prev[taskId],
+        taskId,
+        remarks: text,
+        isSelected: prev[taskId]?.isSelected || false,
+        status: prev[taskId]?.status || "",
+      },
+    }))
+  }, [])
 
   // Submit updates
-  const handleSubmit = async () => {
-    const selectedTasks = Object.values(taskUpdates).filter((update) => update.isSelected && update.status)
+  const handleSubmit = useCallback(async () => {
+    const selectedTasks = Object.values(taskUpdates).filter(
+      (update) => update.isSelected && (update.remarks && update.remarks.trim().length > 0),
+    )
 
     if (selectedTasks.length === 0) {
-      alert("Please select tasks and set their status before submitting.")
+      alert("Please select tasks and add remarks before submitting.")
       return
     }
 
@@ -171,10 +191,11 @@ export default function TasksView() {
           formData.append("action", "update")
           formData.append("rowIndex", task.rowIndex.toString())
 
-          // Create array for the row with current values, updating only L and M
-          const rowData = new Array(13).fill("")
+          // Create array for the row with current values, updating only L, M and P (remarks)
+          const rowData = new Array(16).fill("")
           rowData[11] = new Date().toISOString().split("T")[0] // Column L - current date
           rowData[12] = "Complete" // Column M - status
+          rowData[15] = update.remarks || "" // Column P - remarks
           formData.append("rowData", JSON.stringify(rowData))
         } else if (update.status === "Extend" && update.extendDate) {
           // For Extend: Check Column K value to determine target column
@@ -184,8 +205,8 @@ export default function TasksView() {
           // Get Column K value (index 10)
           const columnKValue = task.columnK || "0" // Default to 0 if not present
 
-          // Create array for the row with current values
-          const rowData = new Array(13).fill("")
+          // Create array for the row with current values (ensure space up to Column P for remarks)
+          const rowData = new Array(16).fill("")
 
           // Determine which column to update based on Column K value
           switch (columnKValue.toString()) {
@@ -209,7 +230,33 @@ export default function TasksView() {
               break
           }
 
+          // Ensure current status shows Pending after extending
+          rowData[12] = "Pending" // Column M
+
+          // Always write remarks to Column P
+          rowData[15] = update.remarks || ""
           formData.append("rowData", JSON.stringify(rowData))
+        } else if (update.status === "Hold") {
+          // For Hold: Update Column M to "Hold" and write remarks to Column P
+          formData.append("action", "update")
+          formData.append("rowIndex", task.rowIndex.toString())
+
+          const rowData = new Array(16).fill("")
+          rowData[12] = "Hold" // Column M - status
+          rowData[15] = update.remarks || "" // Column P - remarks
+          formData.append("rowData", JSON.stringify(rowData))
+        } else {
+          // For other statuses (e.g., Hold) or when only remarks need saving
+          if ((update.remarks || "").trim().length > 0) {
+            formData.append("action", "update")
+            formData.append("rowIndex", task.rowIndex.toString())
+            const rowData = new Array(16).fill("")
+            rowData[15] = update.remarks || ""
+            formData.append("rowData", JSON.stringify(rowData))
+          } else {
+            // Skip if nothing to update
+            continue
+          }
         }
 
         const response = await fetch(
@@ -230,12 +277,11 @@ export default function TasksView() {
       setTaskUpdates({}) // Clear selections
       await fetchData() // Refresh data
     } catch (err) {
-      console.error("Error updating tasks:", err)
       alert(`Error updating tasks: ${err instanceof Error ? err.message : "Unknown error"}`)
     } finally {
       setSubmitting(false)
     }
-  }
+  }, [data, taskUpdates, fetchData])
 
   // Get status badge color
   const getStatusBadgeColor = (status: string): string => {
@@ -243,6 +289,7 @@ export default function TasksView() {
     const statusLower = status.toLowerCase()
     if (statusLower.includes("completed") || statusLower.includes("complete")) return "bg-green-100 text-green-800"
     if (statusLower.includes("pending")) return "bg-orange-100 text-orange-800"
+    if (statusLower.includes("hold")) return "bg-blue-100 text-blue-800"
     if (statusLower.includes("progress") || statusLower.includes("ongoing")) return "bg-yellow-100 text-yellow-800"
     if (statusLower.includes("cancelled")) return "bg-red-100 text-red-800"
     return "bg-gray-100 text-gray-800"
@@ -295,17 +342,15 @@ export default function TasksView() {
   }
 
   // Filter tasks based on column L
-  const allPendingTasks = data.filter((task) => !task.columnL || task.columnL.trim() === "")
-  const completedTasks = data.filter((task) => task.columnL && task.columnL.trim() !== "")
+  const allPendingTasks = useMemo(() => data.filter((task) => !task.columnL || task.columnL.trim() === ""), [data])
+  const completedTasks = useMemo(() => data.filter((task) => task.columnL && task.columnL.trim() !== ""), [data])
 
   // Helper function to convert date string to yyyy-mm-dd format for comparison
   const normalizeDate = (dateString: string) => {
     if (!dateString) return ""
-    console.log("Input date string:", dateString, "Type:", typeof dateString)
 
     // If it's already in yyyy-mm-dd format, return as is
     if (dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
-      console.log("Already in yyyy-mm-dd format:", dateString)
       return dateString
     }
 
@@ -317,7 +362,6 @@ export default function TasksView() {
         const month = parts[1].padStart(2, "0")
         const year = parts[2]
         const normalized = `${year}-${month}-${day}`
-        console.log("Converted dd/mm/yyyy to yyyy-mm-dd:", dateString, "->", normalized)
         return normalized
       }
     }
@@ -327,49 +371,256 @@ export default function TasksView() {
       const date = new Date(dateString)
       if (!isNaN(date.getTime())) {
         const normalized = date.toISOString().split("T")[0]
-        console.log("Parsed and converted date:", dateString, "->", normalized)
         return normalized
       }
     } catch (error) {
-      console.log("Date parsing failed:", error)
-    }
 
-    console.log("Could not normalize date, returning original:", dateString)
+    }
     return dateString
   }
 
   // Apply date filter to pending tasks based on Column O text values
-const dateFilteredPendingTasks = (() => {
-  console.log("Applying filter:", dateFilter)
-  
-  switch (dateFilter) {
-    case "today":
-      return allPendingTasks.filter(task => {
-        const columnOValue = task.columnO?.toLowerCase().trim() || ''
-        console.log(`Task ${task.taskId}: Column O value: "${task.columnO}", Match today: ${columnOValue === 'today'}`)
-        return columnOValue === 'today'
-      })
-    case "overdue":
-      return allPendingTasks.filter(task => {
-        const columnOValue = task.columnO?.toLowerCase().trim() || ''
-        console.log(`Task ${task.taskId}: Column O value: "${task.columnO}", Match overdue: ${columnOValue === 'overdue'}`)
-        return columnOValue === 'overdue'
-      })
-    case "upcoming":
-      return allPendingTasks.filter(task => {
-        const columnOValue = task.columnO?.toLowerCase().trim() || ''
-        console.log(`Task ${task.taskId}: Column O value: "${task.columnO}", Match upcoming: ${columnOValue === 'upcoming'}`)
-        return columnOValue === 'upcoming'
-      })
-    case "all":
-    default:
-      return allPendingTasks
-  }
-})()
+  const dateFilteredPendingTasks = useMemo(() => {
+    switch (dateFilter) {
+      case "today":
+        return allPendingTasks.filter((task) => (task.columnO?.toLowerCase().trim() || "") === "today")
+      case "overdue":
+        return allPendingTasks.filter((task) => (task.columnO?.toLowerCase().trim() || "") === "overdue")
+      case "upcoming":
+        return allPendingTasks.filter((task) => (task.columnO?.toLowerCase().trim() || "") === "upcoming")
+      case "all":
+      default:
+        return allPendingTasks
+    }
+  }, [allPendingTasks, dateFilter])
 
   // Apply search filter to both pending and completed tasks
-  const pendingTasks = filterTasksBySearch(dateFilteredPendingTasks)
-  const searchFilteredCompletedTasks = filterTasksBySearch(completedTasks)
+  const pendingTasks = useMemo(() => filterTasksBySearch(dateFilteredPendingTasks), [dateFilteredPendingTasks, searchTerm])
+  const searchFilteredCompletedTasks = useMemo(() => filterTasksBySearch(completedTasks), [completedTasks, searchTerm])
+
+  // Memoized mobile pending row component
+  const PendingMobileCard = useMemo(() => {
+    return memo(function PendingMobileCard({
+      row,
+      isSelected,
+      status,
+      extendDate,
+      remarks,
+      handleCheckboxChange,
+      handleStatusChange,
+      handleExtendDateChange,
+      handleRemarksChange,
+      normalizeDate,
+      getTodayDate,
+      formatDate,
+      getStatusBadgeColor,
+    }: any) {
+      const [localRemarks, setLocalRemarks] = useState(remarks || "")
+      useEffect(() => {
+        setLocalRemarks(remarks || "")
+      }, [remarks, row.taskId])
+      // Debounce syncing remarks to parent to avoid laggy typing
+      useEffect(() => {
+        if (!isSelected) return
+        const h = setTimeout(() => {
+          handleRemarksChange(row.taskId, localRemarks)
+        }, 300)
+        return () => clearTimeout(h)
+      }, [localRemarks, isSelected, row.taskId, handleRemarksChange])
+      return (
+        <Card key={row.id} className="border border-gray-200">
+          <CardContent className="p-4 space-y-3">
+            <div className="flex items-start justify-between">
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  checked={isSelected}
+                  onCheckedChange={(checked) => handleCheckboxChange(row.taskId, checked as boolean)}
+                />
+                <div>
+                  <div className="font-medium text-blue-600 text-sm">{row.taskId}</div>
+                  <div className="text-xs text-gray-500">{row.week}</div>
+                  <div className="font-medium text-sm">{row.doerName}</div>
+                </div>
+              </div>
+              <Badge
+                variant="outline"
+                className={`text-xs whitespace-nowrap ${
+                  normalizeDate(row.columnJ) < getTodayDate()
+                    ? "bg-red-50 text-red-700 border-red-200"
+                    : normalizeDate(row.columnJ) === getTodayDate()
+                      ? "bg-blue-50 text-blue-700 border-blue-200"
+                      : "bg-gray-50 text-gray-700"
+                }`}
+              >
+                {formatDate(row.columnJ)}
+              </Badge>
+            </div>
+
+            <div className="text-sm text-gray-700 break-words">{row.task}</div>
+
+            <div className="flex items-center gap-2">
+              <Badge variant="secondary" className={`text-xs ${getStatusBadgeColor(row.columnM)}`}>
+                {row.columnM || "Pending"}
+              </Badge>
+            </div>
+
+            <div className="space-y-2">
+              <Select
+                value={status}
+                onValueChange={(value) => handleStatusChange(row.taskId, value)}
+                disabled={!isSelected}
+              >
+                <SelectTrigger className="w-full h-8 text-xs">
+                  <SelectValue placeholder="Select action..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Done">Done</SelectItem>
+                  <SelectItem value="Hold">Hold</SelectItem>
+                  <SelectItem value="Extend">Extend</SelectItem>
+                </SelectContent>
+              </Select>
+
+              {status === "Extend" && (
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="date"
+                    value={extendDate}
+                    onChange={(e) => handleExtendDateChange(row.taskId, e.target.value)}
+                    disabled={!isSelected}
+                    className="h-8 text-xs"
+                    placeholder="Select extend date"
+                  />
+                  <Input
+                    type="text"
+                    value={localRemarks}
+                    onChange={(e) => setLocalRemarks(e.target.value)}
+                    onBlur={() => handleRemarksChange(row.taskId, localRemarks)}
+                    disabled={!isSelected}
+                    className="h-8 text-xs"
+                    placeholder="Extend Remarks"
+                  />
+                </div>
+              )}
+              {status !== "Extend" && isSelected && (
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="text"
+                    value={localRemarks}
+                    onChange={(e) => setLocalRemarks(e.target.value)}
+                    onBlur={() => handleRemarksChange(row.taskId, localRemarks)}
+                    disabled={!isSelected}
+                    className="h-8 text-xs"
+                    placeholder="Remarks"
+                  />
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )
+    })
+  }, [])
+
+  // Memoized desktop pending row component
+  const PendingDesktopRow = useMemo(() => {
+    return memo(function PendingDesktopRow({
+      row,
+      isSelected,
+      status,
+      extendDate,
+      remarks,
+      handleCheckboxChange,
+      handleStatusChange,
+      handleExtendDateChange,
+      handleRemarksChange,
+      normalizeDate,
+      getTodayDate,
+      formatDate,
+      getStatusBadgeColor,
+    }: any) {
+      const [localRemarks, setLocalRemarks] = useState(remarks || "")
+      useEffect(() => {
+        setLocalRemarks(remarks || "")
+      }, [remarks, row.taskId])
+      // Debounce syncing remarks to parent to avoid lag on desktop as well
+      useEffect(() => {
+        if (!isSelected) return
+        const h = setTimeout(() => {
+          handleRemarksChange(row.taskId, localRemarks)
+        }, 300)
+        return () => clearTimeout(h)
+      }, [localRemarks, isSelected, row.taskId, handleRemarksChange])
+      return (
+        <tr key={row.id} className="border-b hover:bg-gray-50">
+          <td className="p-3">
+            <Checkbox
+              checked={isSelected}
+              onCheckedChange={(checked) => handleCheckboxChange(row.taskId, checked as boolean)}
+            />
+          </td>
+          <td className="p-3 font-medium text-blue-600 text-sm">{row.taskId}</td>
+          <td className="p-3 text-sm">{row.week}</td>
+          <td className="p-3 font-medium text-sm">{row.doerName}</td>
+          <td className="p-3 text-sm max-w-[200px] break-words">{row.task}</td>
+          <td className="p-3">
+            <Badge
+              variant="outline"
+              className={`text-xs whitespace-nowrap ${
+                normalizeDate(row.columnJ) < getTodayDate()
+                  ? "bg-red-50 text-red-700 border-red-200"
+                  : normalizeDate(row.columnJ) === getTodayDate()
+                    ? "bg-blue-50 text-blue-700 border-blue-200"
+                    : "bg-gray-50 text-gray-700"
+              }`}
+            >
+              {formatDate(row.columnJ)}
+            </Badge>
+          </td>
+          <td className="p-3">
+            <Badge variant="secondary" className={`text-xs ${getStatusBadgeColor(row.columnM)}`}>
+              {row.columnM || "Pending"}
+            </Badge>
+          </td>
+          <td className="p-3">
+            <Select
+              value={status}
+              onValueChange={(value) => handleStatusChange(row.taskId, value)}
+              disabled={!isSelected}
+            >
+              <SelectTrigger className="w-full min-w-[100px] h-8 text-xs">
+                <SelectValue placeholder="Select..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Done">Done</SelectItem>
+                <SelectItem value="Hold">Hold</SelectItem>
+                <SelectItem value="Extend">Extend</SelectItem>
+              </SelectContent>
+            </Select>
+          </td>
+          <td className="p-3">
+            <div className="flex items-center gap-2 min-w-[260px]">
+              <Input
+                type="date"
+                value={extendDate}
+                onChange={(e) => handleExtendDateChange(row.taskId, e.target.value)}
+                disabled={!isSelected || status !== "Extend"}
+                className="h-8 text-xs min-w-[130px]"
+              />
+              <Input
+                type="text"
+                value={localRemarks}
+                onChange={(e) => setLocalRemarks(e.target.value)}
+                onBlur={() => handleRemarksChange(row.taskId, localRemarks)}
+                disabled={!isSelected}
+                className="h-8 text-xs min-w-[120px]"
+                placeholder={status === "Extend" ? "Extend Remarks" : "Remarks"}
+              />
+            </div>
+          </td>
+        </tr>
+      )
+    })
+  }, [])
 
   if (loading) {
     return (
@@ -394,8 +645,33 @@ const dateFilteredPendingTasks = (() => {
 
   return (
     <div className="w-full max-w-full">
+      {/* Fixed actions so Refresh + Submit stay visible while scrolling */}
+      <div className="fixed top-2 right-2 z-50 flex items-center gap-2 bg-white/95 shadow-md border border-gray-200 rounded-md px-2 py-1">
+        <Button onClick={fetchData} variant="outline" size="sm" className="whitespace-nowrap bg-transparent">
+          <RefreshCw className="h-4 w-4 mr-2" />
+          Refresh
+        </Button>
+        <Button
+          onClick={handleSubmit}
+          disabled={submitting || !hasEligibleSelection}
+          size="sm"
+          className={`whitespace-nowrap ${
+            submitting || !hasEligibleSelection ? "bg-blue-400 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700"
+          }`}
+          title={submitting ? "Updating..." : !hasEligibleSelection ? "Select tasks and add remarks to enable" : "Submit updates"}
+        >
+          {submitting ? "Updating..." : "Submit Updates"}
+        </Button>
+      </div>
       <div className="flex flex-col gap-4 mb-6">
-        <h2 className="text-xl sm:text-2xl font-bold">Tasks</h2>
+        <div className="flex items-center justify-between sticky top-0 z-50 bg-white border-b border-gray-100 py-2 px-2 shadow-sm">
+          <h2 className="text-xl sm:text-2xl font-bold">Tasks</h2>
+          {/* Top-right actions: Refresh and Submit next to the title (now on all sizes) */}
+          <div className="flex items-center gap-2">
+
+            
+          </div>
+        </div>
         <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
           {/* Search Input */}
           <div className="relative flex-1 min-w-0">
@@ -420,16 +696,16 @@ const dateFilteredPendingTasks = (() => {
                 <SelectItem value="upcoming">Upcoming Tasks</SelectItem>
               </SelectContent>
             </Select>
-            <Button
-              onClick={handleSubmit}
-              disabled={submitting || Object.values(taskUpdates).filter((u) => u.isSelected).length === 0}
-              className="bg-blue-600 hover:bg-blue-700 whitespace-nowrap"
-            >
-              {submitting ? "Updating..." : "Submit Updates"}
-            </Button>
             <Button onClick={fetchData} variant="outline" size="sm" className="whitespace-nowrap bg-transparent">
               <RefreshCw className="h-4 w-4 mr-2" />
               Refresh
+            </Button>
+            <Button
+              onClick={handleSubmit}
+              disabled={submitting || !hasEligibleSelection}
+              className="bg-blue-600 hover:bg-blue-700 whitespace-nowrap"
+            >
+              {submitting ? "Updating..." : "Submit Updates"}
             </Button>
           </div>
         </div>
@@ -474,77 +750,24 @@ const dateFilteredPendingTasks = (() => {
                 {pendingTasks.length > 0 ? (
                   <div className="space-y-4 p-4">
                     {pendingTasks.map((row) => {
-                      const update = taskUpdates[row.taskId] || {
-                        taskId: row.taskId,
-                        status: "",
-                        extendDate: "",
-                        isSelected: false,
-                      }
+                      const u = taskUpdates[row.taskId]
                       return (
-                        <Card key={row.id} className="border border-gray-200">
-                          <CardContent className="p-4 space-y-3">
-                            <div className="flex items-start justify-between">
-                              <div className="flex items-center gap-2">
-                                <Checkbox
-                                  checked={update.isSelected}
-                                  onCheckedChange={(checked) => handleCheckboxChange(row.taskId, checked as boolean)}
-                                />
-                                <div>
-                                  <div className="font-medium text-blue-600 text-sm">{row.taskId}</div>
-                                  <div className="text-xs text-gray-500">{row.week}</div>
-                                  <div className="font-medium text-sm">{row.doerName}</div>
-                                </div>
-                              </div>
-                              <Badge
-                                variant="outline"
-                                className={`text-xs whitespace-nowrap ${
-                                  normalizeDate(row.columnJ) < getTodayDate()
-                                    ? "bg-red-50 text-red-700 border-red-200"
-                                    : normalizeDate(row.columnJ) === getTodayDate()
-                                      ? "bg-blue-50 text-blue-700 border-blue-200"
-                                      : "bg-gray-50 text-gray-700"
-                                }`}
-                              >
-                                {formatDate(row.columnJ)}
-                              </Badge>
-                            </div>
-
-                            <div className="text-sm text-gray-700 break-words">{row.task}</div>
-
-                            <div className="flex items-center gap-2">
-                              <Badge variant="secondary" className={`text-xs ${getStatusBadgeColor(row.columnM)}`}>
-                                {row.columnM || "Pending"}
-                              </Badge>
-                            </div>
-
-                            <div className="space-y-2">
-                              <Select
-                                value={update.status}
-                                onValueChange={(value) => handleStatusChange(row.taskId, value)}
-                                disabled={!update.isSelected}
-                              >
-                                <SelectTrigger className="w-full h-8 text-xs">
-                                  <SelectValue placeholder="Select action..." />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="Done">Done</SelectItem>
-                                  <SelectItem value="Extend">Extend</SelectItem>
-                                </SelectContent>
-                              </Select>
-
-                              {update.status === "Extend" && (
-                                <Input
-                                  type="date"
-                                  value={update.extendDate}
-                                  onChange={(e) => handleExtendDateChange(row.taskId, e.target.value)}
-                                  disabled={!update.isSelected}
-                                  className="w-full h-8 text-xs"
-                                  placeholder="Select extend date"
-                                />
-                              )}
-                            </div>
-                          </CardContent>
-                        </Card>
+                        <PendingMobileCard
+                          key={row.id}
+                          row={row}
+                          isSelected={u?.isSelected ?? false}
+                          status={u?.status ?? ""}
+                          extendDate={u?.extendDate ?? ""}
+                          remarks={u?.remarks ?? ""}
+                          handleCheckboxChange={handleCheckboxChange}
+                          handleStatusChange={handleStatusChange}
+                          handleExtendDateChange={handleExtendDateChange}
+                          handleRemarksChange={handleRemarksChange}
+                          normalizeDate={normalizeDate}
+                          getTodayDate={getTodayDate}
+                          formatDate={formatDate}
+                          getStatusBadgeColor={getStatusBadgeColor}
+                        />
                       )
                     })}
                   </div>
@@ -561,85 +784,42 @@ const dateFilteredPendingTasks = (() => {
 
               {/* Desktop Table View */}
               <div className="hidden lg:block overflow-x-auto">
-                <table className="w-full border-collapse">
+                <table className="w-full border-collapse table-fixed">
                   <thead>
-                    <tr className="border-b">
-                      <th className="text-left p-3 font-semibold">Select</th>
-                      <th className="text-left p-3 font-semibold">Task ID</th>
-                      <th className="text-left p-3 font-semibold">Week</th>
-                      <th className="text-left p-3 font-semibold">Doer Name</th>
-                      <th className="text-left p-3 font-semibold">Task</th>
-                      <th className="text-left p-3 font-semibold">Date</th>
-                      <th className="text-left p-3 font-semibold">Current Status</th>
-                      <th className="text-left p-3 font-semibold">Action</th>
-                      <th className="text-left p-3 font-semibold">Extend Date</th>
+                    <tr className="border-b ">
+                      <th className="text-left p-3 font-semibold w-16">Select</th>
+                      <th className="text-left p-3 font-semibold w-28">Task ID</th>
+                      <th className="text-left p-3 font-semibold w-24">Week</th>
+                      <th className="text-left p-3 font-semibold w-36">Doer Name</th>
+                      <th className="text-left p-3 font-semibold w-80">Task</th>
+                      <th className="text-left p-3 font-semibold w-28">Date</th>
+                      <th className="text-left p-3 font-semibold w-36">Current Status</th>
+                      <th className="text-left p-3 font-semibold w-28">Action</th>
+                      <th className="text-left p-3 font-semibold w-32 whitespace-nowrap">Extend Date</th>
+                      <th className="text-left p-3 font-semibold w-48 whitespace-nowrap">Remarks</th>
                     </tr>
                   </thead>
                   <tbody>
                     {pendingTasks.length > 0 ? (
                       pendingTasks.map((row) => {
-                        const update = taskUpdates[row.taskId] || {
-                          taskId: row.taskId,
-                          status: "",
-                          extendDate: "",
-                          isSelected: false,
-                        }
+                        const u = taskUpdates[row.taskId]
                         return (
-                          <tr key={row.id} className="border-b hover:bg-gray-50">
-                            <td className="p-3">
-                              <Checkbox
-                                checked={update.isSelected}
-                                onCheckedChange={(checked) => handleCheckboxChange(row.taskId, checked as boolean)}
-                              />
-                            </td>
-                            <td className="p-3 font-medium text-blue-600 text-sm">{row.taskId}</td>
-                            <td className="p-3 text-sm">{row.week}</td>
-                            <td className="p-3 font-medium text-sm">{row.doerName}</td>
-                            <td className="p-3 text-sm max-w-[200px] break-words">{row.task}</td>
-                            <td className="p-3">
-                              <Badge
-                                variant="outline"
-                                className={`text-xs whitespace-nowrap ${
-                                  normalizeDate(row.columnJ) < getTodayDate()
-                                    ? "bg-red-50 text-red-700 border-red-200"
-                                    : normalizeDate(row.columnJ) === getTodayDate()
-                                      ? "bg-blue-50 text-blue-700 border-blue-200"
-                                      : "bg-gray-50 text-gray-700"
-                                }`}
-                              >
-                                {formatDate(row.columnJ)}
-                              </Badge>
-                            </td>
-                            <td className="p-3">
-                              <Badge variant="secondary" className={`text-xs ${getStatusBadgeColor(row.columnM)}`}>
-                                {row.columnM || "Pending"}
-                              </Badge>
-                            </td>
-                            <td className="p-3">
-                              <Select
-                                value={update.status}
-                                onValueChange={(value) => handleStatusChange(row.taskId, value)}
-                                disabled={!update.isSelected}
-                              >
-                                <SelectTrigger className="w-full min-w-[100px] h-8 text-xs">
-                                  <SelectValue placeholder="Select..." />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="Done">Done</SelectItem>
-                                  <SelectItem value="Extend">Extend</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </td>
-                            <td className="p-3">
-                              <Input
-                                type="date"
-                                value={update.extendDate}
-                                onChange={(e) => handleExtendDateChange(row.taskId, e.target.value)}
-                                disabled={!update.isSelected || update.status !== "Extend"}
-                                className="w-full min-w-[130px] h-8 text-xs"
-                              />
-                            </td>
-                          </tr>
+                          <PendingDesktopRow
+                            key={row.id}
+                            row={row}
+                            isSelected={u?.isSelected ?? false}
+                            status={u?.status ?? ""}
+                            extendDate={u?.extendDate ?? ""}
+                            remarks={u?.remarks ?? ""}
+                            handleCheckboxChange={handleCheckboxChange}
+                            handleStatusChange={handleStatusChange}
+                            handleExtendDateChange={handleExtendDateChange}
+                            handleRemarksChange={handleRemarksChange}
+                            normalizeDate={normalizeDate}
+                            getTodayDate={getTodayDate}
+                            formatDate={formatDate}
+                            getStatusBadgeColor={getStatusBadgeColor}
+                          />
                         )
                       })
                     ) : (
@@ -781,11 +961,12 @@ const dateFilteredPendingTasks = (() => {
           </Card>
         </TabsContent>
       </Tabs>
+      {/* Floating submit removed per request; use header Submit button (left of Refresh) */}
     </div>
   )
 }
 
-
+// ... rest of the code remains the same ...
 
 
 
@@ -835,25 +1016,25 @@ const dateFilteredPendingTasks = (() => {
 //   const fetchData = async () => {
 //     setLoading(true)
 //     setError(null)
-    
+
 //     try {
 //       console.log("Fetching data from Google Sheets...")
-      
+
 //       // First, let's test without sheet parameter to see what sheets are available
 //       const testResponse = await fetch("https://script.google.com/macros/s/AKfycbw7DWi7erjdmCnV2BQNCf-XG4W4k8XTUgx8QnVZukiGOU6CEeegkqrLb95m91BL2Nvh/exec")
 //       const testResult = await testResponse.json()
 //       console.log("Test response (no sheet param):", testResult)
-      
+
 //       // Now try with Master sheet
 //       const response = await fetch("https://script.google.com/macros/s/AKfycbw7DWi7erjdmCnV2BQNCf-XG4W4k8XTUgx8QnVZukiGOU6CEeegkqrLb95m91BL2Nvh/exec?sheet=Master&action=fetch")
-      
+
 //       if (!response.ok) {
 //         throw new Error(`HTTP error! status: ${response.status}`)
 //       }
-      
+
 //       const result = await response.json()
 //       console.log("Response from Google Apps Script:", result)
-      
+
 //       if (result.success && result.data) {
 //         // Skip header row and map the data
 //         const mappedData = result.data.slice(1).map((row: any[], index: number) => ({
@@ -868,7 +1049,7 @@ const dateFilteredPendingTasks = (() => {
 //           status: row[12] || '', // Column M
 //           columnL: row[11] || '' // Column L (index 11 since array is 0-based)
 //         })).filter((row: SheetRow) => row.taskId) // Filter out empty rows
-        
+
 //         console.log("Mapped data:", mappedData)
 //         setData(mappedData)
 //       } else {
@@ -933,14 +1114,14 @@ const dateFilteredPendingTasks = (() => {
 // // Submit updates
 // const handleSubmit = async () => {
 //   const selectedTasks = Object.values(taskUpdates).filter(update => update.isSelected && update.status)
-  
+
 //   if (selectedTasks.length === 0) {
 //     alert("Please select tasks and set their status before submitting.")
 //     return
 //   }
 
 //   setSubmitting(true)
-  
+
 //   try {
 //     for (const update of selectedTasks) {
 //       const task = data.find(t => t.taskId === update.taskId)
@@ -948,29 +1129,29 @@ const dateFilteredPendingTasks = (() => {
 
 //       const formData = new FormData()
 //       formData.append('sheetName', 'Master')
-      
+
 //       if (update.status === 'Done') {
 //         // For Done: Update Column L with current date and Column M with "Complete"
 //         formData.append('action', 'update')
 //         formData.append('rowIndex', task.rowIndex.toString())
-        
+
 //         // Create array for the row with current values, updating only L and M
 //         const rowData = new Array(13).fill('')
 //         rowData[11] = new Date().toISOString().split('T')[0] // Column L - current date
 //         rowData[12] = 'Complete' // Column M - status
-        
+
 //         formData.append('rowData', JSON.stringify(rowData))
 //       } else if (update.status === 'Extend' && update.extendDate) {
 //         // For Extend: Check Column K value to determine target column
 //         formData.append('action', 'update')
 //         formData.append('rowIndex', task.rowIndex.toString())
-        
+
 //         // Get Column K value (index 10)
 //         const columnKValue = task.columnK || '0' // Default to 0 if not present
-        
+
 //         // Create array for the row with current values
 //         const rowData = new Array(13).fill('')
-        
+
 //         // Determine which column to update based on Column K value
 //         switch (columnKValue.toString()) {
 //           case '0':
@@ -992,7 +1173,7 @@ const dateFilteredPendingTasks = (() => {
 //             rowData[4] = update.extendDate // Default to Column E
 //             break
 //         }
-        
+
 //         formData.append('rowData', JSON.stringify(rowData))
 //       }
 
@@ -1037,12 +1218,12 @@ const dateFilteredPendingTasks = (() => {
 //   // Format date to dd/mm/yyyy - if already in dd/mm/yyyy format, return as is
 //   const formatDate = (dateString: string) => {
 //     if (!dateString) return "No date"
-    
+
 //     // If it's already in dd/mm/yyyy format, return as is
 //     if (dateString.match(/^\d{1,2}\/\d{1,2}\/\d{4}$/)) {
 //       return dateString
 //     }
-    
+
 //     try {
 //       const date = new Date(dateString)
 //       if (!isNaN(date.getTime())) {
@@ -1054,26 +1235,26 @@ const dateFilteredPendingTasks = (() => {
 //     } catch {
 //       // If parsing fails, return original string
 //     }
-    
+
 //     return dateString
 //   }
 
 //   // Filter tasks based on column L
 //   const allPendingTasks = data.filter(task => !task.columnL || task.columnL.trim() === '')
 //   const completedTasks = data.filter(task => task.columnL && task.columnL.trim() !== '')
-  
+
 //   // Helper function to convert date string to yyyy-mm-dd format for comparison
 //   const normalizeDate = (dateString: string) => {
 //     if (!dateString) return ""
-    
+
 //     console.log("Input date string:", dateString, "Type:", typeof dateString)
-    
+
 //     // If it's already in yyyy-mm-dd format, return as is
 //     if (dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
 //       console.log("Already in yyyy-mm-dd format:", dateString)
 //       return dateString
 //     }
-    
+
 //     // If it's in dd/mm/yyyy format, convert to yyyy-mm-dd
 //     if (dateString.includes('/')) {
 //       const parts = dateString.split('/')
@@ -1086,7 +1267,7 @@ const dateFilteredPendingTasks = (() => {
 //         return normalized
 //       }
 //     }
-    
+
 //     // Try to parse as date and convert
 //     try {
 //       const date = new Date(dateString)
@@ -1098,7 +1279,7 @@ const dateFilteredPendingTasks = (() => {
 //     } catch (error) {
 //       console.log("Date parsing failed:", error)
 //     }
-    
+
 //     console.log("Could not normalize date, returning original:", dateString)
 //     return dateString
 //   }
@@ -1107,7 +1288,7 @@ const dateFilteredPendingTasks = (() => {
 //   const pendingTasks = (() => {
 //     const today = getTodayDate()
 //     console.log("Today's date (yyyy-mm-dd):", today)
-    
+
 //     switch (dateFilter) {
 //       case "today":
 //         return allPendingTasks.filter(task => {
@@ -1172,8 +1353,8 @@ const dateFilteredPendingTasks = (() => {
 //               <SelectItem value="upcoming">Upcoming Tasks</SelectItem>
 //             </SelectContent>
 //           </Select>
-//           <Button 
-//             onClick={handleSubmit} 
+//           <Button
+//             onClick={handleSubmit}
 //             disabled={submitting || Object.values(taskUpdates).filter(u => u.isSelected).length === 0}
 //             className="bg-blue-600 hover:bg-blue-700 w-full sm:w-auto"
 //           >
@@ -1207,7 +1388,7 @@ const dateFilteredPendingTasks = (() => {
 //           <Card>
 //             <CardHeader>
 //               <CardTitle>
-//                 Pending Tasks 
+//                 Pending Tasks
 //                 {dateFilter !== "all" && (
 //                   <span className="text-sm font-normal text-gray-600 ml-2">
 //                     (Filtered by: {dateFilter === "today" ? "Today" : dateFilter === "overdue" ? "Overdue" : "Upcoming"})
@@ -1238,7 +1419,7 @@ const dateFilteredPendingTasks = (() => {
 //                           return (
 //                             <tr key={row.id} className="border-b hover:bg-gray-50">
 //                               <td className="p-2">
-//                                 <Checkbox 
+//                                 <Checkbox
 //                                   checked={update.isSelected}
 //                                   onCheckedChange={(checked) => handleCheckboxChange(row.taskId, checked as boolean)}
 //                                 />
@@ -1247,11 +1428,11 @@ const dateFilteredPendingTasks = (() => {
 //                               <td className="p-2 font-medium text-sm">{row.doerName}</td>
 //                               <td className="p-2 text-sm max-w-[200px] break-words">{row.task}</td>
 //                               <td className="p-2">
-//                                 <Badge 
-//                                   variant="outline" 
+//                                 <Badge
+//                                   variant="outline"
 //                                   className={`text-xs whitespace-nowrap ${
-//                                     normalizeDate(row.columnJ) < getTodayDate() 
-//                                       ? "bg-red-50 text-red-700 border-red-200" 
+//                                     normalizeDate(row.columnJ) < getTodayDate()
+//                                       ? "bg-red-50 text-red-700 border-red-200"
 //                                       : normalizeDate(row.columnJ) === getTodayDate()
 //                                       ? "bg-blue-50 text-blue-700 border-blue-200"
 //                                       : "bg-gray-50 text-gray-700"
@@ -1266,8 +1447,8 @@ const dateFilteredPendingTasks = (() => {
 //                                 </Badge>
 //                               </td>
 //                               <td className="p-2">
-//                                 <Select 
-//                                   value={update.status} 
+//                                 <Select
+//                                   value={update.status}
 //                                   onValueChange={(value) => handleStatusChange(row.taskId, value)}
 //                                   disabled={!update.isSelected}
 //                                 >
@@ -1295,8 +1476,8 @@ const dateFilteredPendingTasks = (() => {
 //                       ) : (
 //                         <tr>
 //                           <td colSpan={8} className="text-center py-8 text-gray-500">
-//                             {dateFilter === "all" 
-//                               ? "No pending tasks found." 
+//                             {dateFilter === "all"
+//                               ? "No pending tasks found."
 //                               : `No ${dateFilter} pending tasks found.`
 //                             }
 //                           </td>
@@ -1337,11 +1518,11 @@ const dateFilteredPendingTasks = (() => {
 //                             <td className="p-2 font-medium text-sm">{row.doerName}</td>
 //                             <td className="p-2 text-sm max-w-[200px] break-words">{row.task}</td>
 //                             <td className="p-2">
-//                               <Badge 
-//                                 variant="outline" 
+//                               <Badge
+//                                 variant="outline"
 //                                 className={`text-xs whitespace-nowrap ${
-//                                   normalizeDate(row.columnJ) < getTodayDate() 
-//                                     ? "bg-red-50 text-red-700 border-red-200" 
+//                                   normalizeDate(row.columnJ) < getTodayDate()
+//                                     ? "bg-red-50 text-red-700 border-red-200"
 //                                     : normalizeDate(row.columnJ) === getTodayDate()
 //                                     ? "bg-blue-50 text-blue-700 border-blue-200"
 //                                     : "bg-gray-50 text-gray-700"

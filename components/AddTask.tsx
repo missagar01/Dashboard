@@ -41,7 +41,7 @@ export default function AddTask() {
     const fetchDoerList = async () => {
       try {
         const response = await fetch(
-          "https://script.google.com/macros/s/AKfycbw7DWi7erjdmCnV2BQNCf-XG4W4k8XTUgx8QnVZukiGOU6CEeegkqrLb95m91BL2Nvh/exec?sheet=Doer List&action=fetch",
+          "https://script.googleusercontent.com/a/macros/botivate.in/echo?user_content_key=AehSKLi-73t-uF0Da2NwO5hi-IvdMzoAXyXDPcTiG82VolLsQ-dJUIpVi3X7nurBEfVIhIyPuIHidTQX4ZBp-5yv_01Ugpd_S5lSgscx3CQ-ns_E3S-TE6Txa3PUVDMEbWIdTTNBB1Vc9o2x2jR9KJ2R0D0VWRYMeA2YlEsLGKx_P3pru46ZfyXxBRfj_sdQ4l5A9hgbjenZuhIuG5KZ7wMSBxffSOOEqif-s86antbps9GEZ_IY7sF2JR9X4dkVa99Et1lvdGGQd0ihJEUoI-qk6Ch87ZUSXiyIZtIl3r4dIFoNgXKSp59M6hoFHPaUcq2dT4rhLBoS&lib=Mau8Ngg4QMxSUSBkfa31FQyTRpxoN5lQD",
         )
         const result = await response.json()
 
@@ -51,7 +51,7 @@ export default function AddTask() {
             number: row[1] || "",
             email: row[2] || "",
           })).filter((doer: DoerInfo) => doer.name.trim() !== "")
-          
+
           setDoerList(doers)
         }
       } catch (error) {
@@ -73,7 +73,7 @@ export default function AddTask() {
       let maxId = 0
       if (result.success && result.data && result.data.length > 0) {
         // Find the highest task ID number by checking all rows
-        result.data.forEach((row) => {
+        result.data.forEach((row: string | any[]) => {
           // Check if row exists and has data in column A (index 0)
           if (row && row.length > 0 && row[0]) {
             const taskId = row[0].toString().trim()
@@ -132,7 +132,7 @@ export default function AddTask() {
   const updateTask = (index: number, field: keyof TaskForm, value: string) => {
     const newTasks = [...tasks]
     newTasks[index][field] = value
-    
+
     // Auto-fill number and email when doer name is selected
     if (field === "doerName") {
       const selectedDoer = doerList.find(doer => doer.name === value)
@@ -141,7 +141,7 @@ export default function AddTask() {
         newTasks[index].email = selectedDoer.email
       }
     }
-    
+
     setTasks(newTasks)
   }
 
