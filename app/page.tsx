@@ -140,8 +140,15 @@ export default function Dashboard() {
     let completedYellow = 0
     let completedRed = 0
     let pending = 0
+    let cancelled = 0
 
     dataArray.forEach((row) => {
+
+      if (row.Status?.toLowerCase() === "cancel" || row.Status?.toLowerCase() === "cancle") {
+      cancelled++ // ✅ Cancel count
+      return
+    }
+
       const isCompleted = row.Status && row.Status.toLowerCase().includes("complete")
       const revisions = row["Total Revisions"] || 0
 
@@ -164,6 +171,7 @@ export default function Dashboard() {
       completedYellow,
       completedRed,
       pending,
+         cancelled, // ✅ new
     })
   }
 
@@ -193,6 +201,7 @@ export default function Dashboard() {
     { title: "Completed (1 Rev)", value: stats.completedYellow, color: "bg-yellow-400" },
     { title: "Completed (2+ Rev)", value: stats.completedRed, color: "bg-red-400" },
     { title: "Pending", value: stats.pending, color: "bg-red-800" },
+    { title: "Cancelled", value: stats.cancelled || 0, color: "bg-gray-500" }, // ✅ new card
   ]
 
   return (
@@ -334,18 +343,18 @@ export default function Dashboard() {
             {activeSection === "dashboard" && (
               <div className="space-y-6">
                 {/* Stats Cards */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
-                  {statsData.map((stat, index) => (
-                    <Card key={index} className={`${stat.color} text-white border-0`}>
-                      <CardContent className="p-4 sm:p-6">
-                        <div className="text-center">
-                          <h3 className="text-sm sm:text-lg font-medium mb-2">{stat.title}</h3>
-                          <p className="text-2xl sm:text-4xl font-bold">{stat.value}</p>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
+               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+  {statsData.map((stat, index) => (
+    <Card key={index} className={`${stat.color} text-white border-0`}>
+      <CardContent className="p-4 sm:p-6">
+        <div className="text-center">
+          <h3 className="text-sm sm:text-lg font-medium mb-2">{stat.title}</h3>
+          <p className="text-2xl sm:text-4xl font-bold">{stat.value}</p>
+        </div>
+      </CardContent>
+    </Card>
+  ))}
+</div>
 
                 {/* Charts Section */}
                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
