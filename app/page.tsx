@@ -32,11 +32,13 @@ interface DataRow {
 
 interface Stats {
   total: number
-  completedGreen: number
-  completedYellow: number
-  completedRed: number
+  completed: number
   pending: number
+  cancelled: number
+  hold: number
+  transfer: number
 }
+
 
 interface StatsData {
   title: string
@@ -134,46 +136,39 @@ export default function Dashboard() {
   }
 
   // Calculate stats from data based on column M and K
-  const calculateStatsFromData = (dataArray: DataRow[]): void => {
-    const total = dataArray.length
-    let completedGreen = 0
-    let completedYellow = 0
-    let completedRed = 0
-    let pending = 0
-    let cancelled = 0
+const calculateStatsFromData = (dataArray: DataRow[]): void => {
+  const total = dataArray.length
+  let completed = 0
+  let pending = 0
+  let cancelled = 0
+  let hold = 0
+  let transfer = 0
 
-    dataArray.forEach((row) => {
+  dataArray.forEach((row) => {
+    const status = row.Status?.toLowerCase() || ""
 
-      if (row.Status?.toLowerCase() === "cancel" || row.Status?.toLowerCase() === "cancle") {
-      cancelled++ // ✅ Cancel count
-      return
+    if (status.includes("cancel") || status.includes("cancle")) {
+      cancelled++
+    } else if (status.includes("hold")) {
+      hold++
+    } else if (status.includes("transfer")) {
+      transfer++
+    } else if (status.includes("complete")) {
+      completed++   // ✅ ab ye count karega
+    } else {
+      pending++
     }
+  })
 
-      const isCompleted = row.Status && row.Status.toLowerCase().includes("complete")
-      const revisions = row["Total Revisions"] || 0
-
-      if (isCompleted) {
-        if (revisions === 0) {
-          completedGreen++
-        } else if (revisions === 1) {
-          completedYellow++
-        } else if (revisions >= 2) {
-          completedRed++
-        }
-      } else {
-        pending++
-      }
-    })
-
-    setStats({
-      total,
-      completedGreen,
-      completedYellow,
-      completedRed,
-      pending,
-         cancelled, // ✅ new
-    })
-  }
+  setStats({
+    total,
+    completed,
+    pending,
+    cancelled,
+    hold,
+    transfer,
+  })
+}
 
   // Load data on component mount
   useEffect(() => {
@@ -182,27 +177,30 @@ export default function Dashboard() {
 
   // Chart data
   const pieChartData: ChartData[] = [
-    { name: "Pending", value: stats.pending, color: "#c1121f" },
-    { name: "Completed (0 Rev)", value: stats.completedGreen, color: "#22c55e" },
-    { name: "Completed (1 Rev)", value: stats.completedYellow, color: "#eab308" },
-    { name: "Completed (2+ Rev)", value: stats.completedRed, color: "#ef4444" },
-  ].filter((item) => item.value > 0)
+  { name: "Completed", value: stats.completed, color: "#22c55e" },
+  { name: "Pending", value: stats.pending, color: "#c1121f" },
+  { name: "Cancelled", value: stats.cancelled, color: "#6b7280" },
+  { name: "Hold", value: stats.hold, color: "#eab308" },
+  { name: "Transfer", value: stats.transfer, color: "#3b82f6" },
+].filter((item) => item.value > 0)
 
   const barChartData: ChartData[] = [
-    { name: "Pending", value: stats.pending },
-    { name: "Completed (0 Rev)", value: stats.completedGreen },
-    { name: "Completed (1 Rev)", value: stats.completedYellow },
-    { name: "Completed (2+ Rev)", value: stats.completedRed },
-  ].filter((item) => item.value > 0)
+  { name: "Completed", value: stats.completed },
+  { name: "Pending", value: stats.pending },
+  { name: "Cancelled", value: stats.cancelled },
+  { name: "Hold", value: stats.hold },
+  { name: "Transfer", value: stats.transfer },
+].filter((item) => item.value > 0)
 
   const statsData: StatsData[] = [
-    { title: "Total Tasks", value: stats.total, color: "bg-cyan-400" },
-    { title: "Completed (0 Rev)", value: stats.completedGreen, color: "bg-green-400" },
-    { title: "Completed (1 Rev)", value: stats.completedYellow, color: "bg-yellow-400" },
-    { title: "Completed (2+ Rev)", value: stats.completedRed, color: "bg-red-400" },
-    { title: "Pending", value: stats.pending, color: "bg-red-800" },
-    { title: "Cancelled", value: stats.cancelled || 0, color: "bg-gray-500" }, // ✅ new card
-  ]
+  { title: "Total Tasks", value: stats.total, color: "bg-cyan-400" },
+  { title: "Completed", value: stats.completed, color: "bg-green-400" },
+  { title: "Pending", value: stats.pending, color: "bg-red-600" },
+  { title: "Cancelled", value: stats.cancelled, color: "bg-gray-500" },
+  { title: "Hold", value: stats.hold, color: "bg-yellow-400" },
+  { title: "Transfer", value: stats.transfer, color: "bg-blue-400" },
+]
+
 
   return (
     <SidebarProvider>
